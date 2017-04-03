@@ -503,6 +503,8 @@ class accesspr:
         self.FL={}
         self.experimentDuration={}
         self.source = source
+        self.version='4.5.1'
+        self.releaseNotes='xpr.FL contains default fluorescence per experiment'
        #print "The given path exists: ";#print path.exists(self.source)
        #print "The given path is a directory: ";#print path.isdir(self.source)
         if path.exists(self.source) and path.isdir(self.source):
@@ -522,7 +524,7 @@ class accesspr:
             self.experimentDuration[filename]=self.data[filename].t[-1]
         self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
         #this stores the absolute duration (in hrs) of the shortest experiment
-        self.extractionFields=['experiment', 'media','strain', 'InitialOD', 'FinalOD', 'InitialRawFL', 'InitialFLperOD', 'FinalFLperOD', 'FLPeak', 'FLAbsPeakTime', 'FLAlignedPeakTime', 'lagTime', 'realTime', 'alignedTime', 'FLperODTS', 'maxGR', 'maxGRvar', 'maxGRTime', 'FLperodAUC', 'grAUC', 'halfFLAreaTime', 'halfGRAreaTime' ]
+        self.extractionFields=['experiment','machine', 'media','strain', 'InitialOD', 'FinalOD', 'InitialRawFL', 'InitialFLperOD', 'FinalFLperOD', 'FLPeak', 'FLAbsPeakTime', 'FLAlignedPeakTime', 'lagTime', 'realTime', 'alignedTime', 'FLperODTS', 'maxGR', 'maxGRvar', 'maxGRTime', 'FLperodAUC', 'grAUC', 'halfFLAreaTime', 'halfGRAreaTime' ]
         self.Aliases={'Hxt4': '409.Hxt4'}
         self.mediaValue={'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2}
         self.strainAlias={'YST_498': 'Hxt1', 'YST_499': 'Hxt1', 'Hxt4': 'Hxt4', 'Hxt2': 'Hxt2','Hxt3': 'Hxt3','Hxt5': 'Hxt5','Hxt6': 'Hxt6','Hxt7n': 'Hxt7' }
@@ -1299,6 +1301,7 @@ class accesspr:
         realTime=[]
         alignedTime=[]
         experiment=[]
+        machine=[]
         maxGR=[]
         maxGRvar=[]
         maxGRTime=[]
@@ -1342,6 +1345,7 @@ class accesspr:
                     FLAlignedPeakTime.append(np.nan)
                     FLperodAUC.append(np.nan)
                     halfFLAreaTime.append(np.nan)
+                machine.append(self.data[containslist[i]].machine)
                 experiment.append(containslist[i])
                 realTime.append(np.str(self.data[containslist[i]].t.T).replace(']', '').replace('[', '').replace('\n', ''))
                 alignedTime.append(np.str(alignTime(self.data[containslist[i]], media, strain).T).replace(']', '').replace('[', '').replace('\n', '') )
@@ -1363,7 +1367,7 @@ class accesspr:
                 strainlist.append(strain)
                 grAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, 'gr'))
                 halfGRAreaTime.append(float(halfAUCTime(self.data[containslist[i]], media, strain, 'gr')))
-        dataset= list(zip(containslist,medialist, strainlist, initialOD, FinalOD, InitialRawFL, InitialFLperOD, FinalFLperOD, FLPeak, FLAbsPeakTime, FLAlignedPeakTime, lagTime, realTime, alignedTime,FLperODTS, maxGR, maxGRvar, maxGRTime, FLperodAUC, grAUC,halfFLAreaTime,halfGRAreaTime))
+        dataset= list(zip(containslist,machine,medialist, strainlist, initialOD, FinalOD, InitialRawFL, InitialFLperOD, FinalFLperOD, FLPeak, FLAbsPeakTime, FLAlignedPeakTime, lagTime, realTime, alignedTime,FLperODTS, maxGR, maxGRvar, maxGRTime, FLperodAUC, grAUC,halfFLAreaTime,halfGRAreaTime))
         df= pd.DataFrame(data=dataset, columns=self.extractionFields)
         return df
     def extractAllInfo(self, excludeNull= False, strict=True):

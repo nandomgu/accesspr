@@ -118,6 +118,7 @@ class platereader:
         self.autocorrected= False
         self.mediacorrected= {}
         self.ignoredwells= []
+        
 
         # define annotation
         if aname == 'default': aname= dname.split('.')[0] + '_contents.xlsx'
@@ -134,6 +135,16 @@ class platereader:
         df= xl.parse(dsheetname)
         # for Tecan plate reader post 2015
         if prtype == 'Tecan':
+            ##getting the serial number of the machine to know whether it is PR1 or PR2
+            snField=df.keys()[['Tecan i-control 'in j for j in df.keys()]][0] #this gives us the name of the 'infinite' field
+            self.serialnumber=df[snField][0].split('Serial number: ')[1] 
+            if self.serialnumber=='1006006292':
+                self.machine='Plate Reader 1'
+            else:
+                if self.serialnumber=='1411011275':
+                    self.machine='Plate Reader 2'
+                else:
+                    self.machine=''
             df= df.replace('OVER', overflow)
             dlabels= df[df.columns[0]].values
             # time in hours

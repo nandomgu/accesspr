@@ -6,6 +6,7 @@ import pickle
 import pandas as pd
 from scipy import integrate as integrate
 from scipy.interpolate import interp1d
+import scipy
 
 ###PLATE READER PLOTTING FUNCTIONS VERSION 3.1.0.
 ###By Luis Fernando Montaño. Swain lab, 2016.
@@ -16,15 +17,70 @@ normalodName='OD'
 fitodName='fOD'
 grName='gr'
 
+
+def robustCorrect(p201703092, f=['GFP', 'AutoFL'], refstrain='WT')
+    t=0
+    while(t<1):
+        try:
+            p201703092.correctauto(f,refstrain)
+            t=1
+        except LinAlgError:
+            continue
+
+def colorDict(keys, colors=0):
+    if colors==0:
+        colors= randomColors(np.size(keys))
+    return dict(zip(keys, colors))
+    
 def transformStat(p, stat, scale, shift, genericLabel=True):
     '''Generates a linear transformation of expression values'''
-    cl=conditionList(p, excludeNull=True).values #condition list array
+    cl=conditionList(p).values #condition list array
     for media in cl[:,0]:
         for strain in cl[:,1]:
             if genericLabel==False:
                 p.d[media][strain][stat+'x'+scale+'+'+shift]=p.d[media][strain][stat]*scale+shift
             else:
                 p.d[media][strain]['transformed'+stat]=p.d[media][strain][stat]*scale+shift
+    p.mediacorrected.update({'transformed'+stat: False})
+    p.datatypes.append('transformed'+stat)       
+    p.datatypes=list(np.unique(p.datatypes))
+    
+def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, jointplot=False): ##performs a linear transformation tailored to every individual channel, 
+    '''Generates a linear transformation of expression values'''
+    allslopes=[]
+    allintercepts=[]
+    allrvalues=[]
+    cl=conditionList(p).values #condition list array
+    for media in cl[:,0]:
+        for strain in cl[:,1]:
+            regstats=statCorrelation(p, media, strain, stat1, stat2, plot=plot)
+            scale=regstats.slope
+            shift=regstats.intercept
+            rvalue=regstats.rvalue
+            if genericLabel==False:
+                p.d[media][strain][stat1+'x'+scale+'+'+shift]=p.d[media][strain][stat1]*scale+shift
+            else:
+                p.d[media][strain]['transformed'+stat1]=p.d[media][strain][stat1]*scale+shift
+            allslopes.append(scale)
+            allintercepts.append(shift)
+            allrvalues.append(rvalue)
+    p.mediacorrected.update({'transformed'+stat1: False})
+    p.datatypes.append('transformed'+stat1)       
+    p.datatypes=list(np.unique(p.datatypes))
+    df=pd.DataFrame(np.column_stack((np.array(allslopes), np.array(allintercepts), np.array(allrvalues))), columns=['slope', 'intercept', 'rvalue'])
+    if report==True:
+        if jointplot==False:
+            if plot==True:
+                plt.figure()
+            plt.scatter(np.array(allslopes),np.array(allintercepts), c=np.array(allrvalues), cmap='viridis')
+            plt.xlabel('slope')
+            plt.ylabel('intercept')
+            plt.title('Fit Distribution')
+            plt.colorbar()
+        else:
+            sns.jointplot('slope', 'intercept', data=df)
+    return
+
 
 #### P MEDIA STRAIN modular functions. functions that run given these 3 parameters
 	
@@ -450,23 +506,24 @@ def statByConcentrationManyStrains(p, stat, strains, conc, time, cols, supress=1
     plt.legend(loc=2)
 
 
-def statCorrelation(p, media, strain, stat1, stat2, degree=0):
+def statCorrelation(p, media, strain, stat1, stat2, degree=0, plot=True):
     '''this function tries to explain one stat in relation to another. there should be the same points
         for both stats, and often these will be raw data. 
         degree is whether we are correlating the normaldata or a particular derivative of it.
     '''
-    plt.scatter(p.d[media][strain][stat1],p.d[media][strain][stat2])
-    plt.xlabel(stat1)
-    plt.ylabel(stat2)
     reg=scipy.stats.linregress(p.d[media][strain][stat1].flatten(),p.d[media][strain][stat2].flatten())
     ln=np.linspace(0, np.max(p.d[media][strain][stat1]), 300)
     ln2=np.linspace(0, np.max(p.d[media][strain][stat1]), 300)*reg.slope+reg.intercept
-    plt.plot(ln, ln2, color='red')
-    plt.legend([ 'y='+str(reg.slope)+'x'+stringSign(reg.intercept)+str(reg.intercept),strain+' in '+media])
+    if plot==True:
+        plt.scatter(p.d[media][strain][stat1],p.d[media][strain][stat2])
+        plt.xlabel(stat1)
+        plt.ylabel(stat2)
+        plt.plot(ln, ln2, color='red')
+        plt.legend([ 'y='+str(reg.slope)+'x'+stringSign(reg.intercept)+str(reg.intercept),strain+' in '+media])
     return reg
 
 def stringSign(x):
-    if sign(x)==1:
+    if np.sign(x)==1:
         return '+'
     else: 
         return ''
@@ -786,8 +843,8 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
                 plt.xlim(xlim)
             if ylim != False:
                 plt.ylim(ylim)
-            plt.title('Raw '+dtype+' of '+sdf['strain'][x]+' in all media')
-            plt.ylabel('Raw '+dtype)
+            plt.title(dtype+' of '+sdf['strain'][x]+' in all media')
+            plt.ylabel(dtype)
             plt.xlabel('Time (Hrs)')
         plt.figlegend(patches, legendNames, 'upper right')
     return mediaColors
