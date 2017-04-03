@@ -18,11 +18,11 @@ fitodName='fOD'
 grName='gr'
 
 
-def robustCorrect(p201703092, f=['GFP', 'AutoFL'], refstrain='WT')
+def robustCorrect(p, f=['GFP', 'AutoFL'], refstrain='WT'):
     t=0
     while(t<1):
         try:
-            p201703092.correctauto(f,refstrain)
+            p.correctauto(f=f,refstrain=refstrain)
             t=1
         except LinAlgError:
             continue
