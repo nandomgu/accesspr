@@ -13,6 +13,10 @@ import prPlottingFunctions as ppf
 #getcontext().prec = 3
 
 
+def createPatches(colorDict, loc='upper right'):
+	patches= [[pch.Patch(color=c) for c in colorDict[j]] for j in colorDict.keys() ]
+	lgnds= colorDict.keys()
+	plt.figlegend(patches, lgnds, loc)
 
 
 def halfAUCIndex(vector):
@@ -922,7 +926,7 @@ class accesspr:
         else:
             print('Experiments have already been aligned. to realign, try rerun=True')
 
-    def plotReplicateMean(self, media, strain, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False):
+    def plotReplicateMean(self, media, strain, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1):
         if dtype=='':
             try:
                 dtype=self.consensusFLperod
@@ -934,6 +938,8 @@ class accesspr:
         for m in media:
             print('processing '+m)
             interpolated= self.interpTimes(m, strain, dtype=dtype)
+            interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
+            interpolated['time']=interpolated['time'][excludeFirst:excludeLast]
             if normalise==True:
                 interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
             mn=np.nanmean(interpolated[dtype],1)

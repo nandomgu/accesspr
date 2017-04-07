@@ -7,6 +7,7 @@ import pandas as pd
 from scipy import integrate as integrate
 from scipy.interpolate import interp1d
 import scipy
+import seaborn as sns
 
 ###PLATE READER PLOTTING FUNCTIONS VERSION 3.1.0.
 ###By Luis Fernando Montaño. Swain lab, 2016.
@@ -511,9 +512,10 @@ def statCorrelation(p, media, strain, stat1, stat2, degree=0, plot=True):
         for both stats, and often these will be raw data. 
         degree is whether we are correlating the normaldata or a particular derivative of it.
     '''
-    reg=scipy.stats.linregress(p.d[media][strain][stat1].flatten(),p.d[media][strain][stat2].flatten())
-    ln=np.linspace(0, np.max(p.d[media][strain][stat1]), 300)
-    ln2=np.linspace(0, np.max(p.d[media][strain][stat1]), 300)*reg.slope+reg.intercept
+    notnans=np.isnan(p.d[media][strain][stat2].flatten())==False
+    reg=scipy.stats.linregress(p.d[media][strain][stat1].flatten()[notnans],p.d[media][strain][stat2].flatten()[notnans])
+    ln=np.linspace(0, np.nanmax(p.d[media][strain][stat1]), 300)
+    ln2=np.linspace(0, np.nanmax(p.d[media][strain][stat1]), 300)*reg.slope+reg.intercept
     if plot==True:
         plt.scatter(p.d[media][strain][stat1],p.d[media][strain][stat2])
         plt.xlabel(stat1)
