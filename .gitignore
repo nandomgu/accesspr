@@ -1,0 +1,14 @@
+
+*.pyc
+
+__pycache__/accesspr.cpython-35.pyc
+
+__pycache__/fitderiv.cpython-35.pyc
+
+__pycache__/gaussianprocess.cpython-35.pyc
+
+__pycache__/genutils.cpython-35.pyc
+
+20170402_PromoterProtein.ipynb
+
+20170402_PromoterProtein.ipynb
