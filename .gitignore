@@ -12,3 +12,9 @@ __pycache__/genutils.cpython-35.pyc
 20170402_PromoterProtein.ipynb
 
 20170402_PromoterProtein.ipynb
+
+*.pyc
+
+.ipynb_checkpoints/Hxt pyruvate analysis-checkpoint.ipynb
+
+.ipynb_checkpoints/MoClo Promoters Analyisis -checkpoint.ipynb

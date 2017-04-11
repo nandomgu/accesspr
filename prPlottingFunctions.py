@@ -8,6 +8,7 @@ from scipy import integrate as integrate
 from scipy.interpolate import interp1d
 import scipy
 import seaborn as sns
+from numpy.matlib import repmat
 
 ###PLATE READER PLOTTING FUNCTIONS VERSION 3.1.0.
 ###By Luis Fernando Montaño. Swain lab, 2016.

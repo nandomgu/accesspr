@@ -15,7 +15,7 @@ plt.rcParams['figure.max_open_warning']= 0
 
 class platereader:
     '''
-    Version 4.5: for analyzing platereader data, correcting for autofluorescence, and extracting growth rates
+    Version 4.5.3: for analyzing platereader data, correcting for autofluorescence, and extracting growth rates
 
     A typical work flow is:
 
@@ -102,6 +102,8 @@ class platereader:
         # specify working directory
         self.wdir= wdir
         self.dname= dname
+        self.dsheetname=dsheetname
+        self.asheetname=asheetname
         self.ODfname= ODfname
 
         # general parameters

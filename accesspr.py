@@ -12,7 +12,15 @@ import prPlottingFunctions as ppf
 #from decimal import *
 #getcontext().prec = 3
 
-
+def DFTransform(df, targetVariable, groupVariable, group, scale=1, shift=0):
+    df2=df
+    a=df
+    a[targetVariable][a[groupVariable]==group]=df[targetVariable][df[groupVariable]==group]*scale+shift
+    df=df2
+    print(df[targetVariable][df[groupVariable]==group])
+    print(a[targetVariable][a[groupVariable]==group])
+    return a
+    
 def createPatches(colorDict, loc='upper right'):
 	patches= [[pch.Patch(color=c) for c in colorDict[j]] for j in colorDict.keys() ]
 	lgnds= colorDict.keys()
@@ -80,7 +88,7 @@ def flatten(listoflists):
     flattened = [val for sublist in listoflists for val in sublist]
     return flattened
     
-def colorScatter(p, media, strain, xstat=False, ystat='ODmn', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=100, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=True):
+def colorScatter(p, media, strain, xstat=False, ystat='ODmn', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=100, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=True, vmin=0, vmax=0, xlabel=1,ylabel=1):
     if xstat==False:
         xstat='time'
     x=p.d[media][strain][xstat]
@@ -92,14 +100,22 @@ def colorScatter(p, media, strain, xstat=False, ystat='ODmn', colorBy='d/dtgr', 
         #cols=cols.reshape(-1,1)
         #print('cols=', cols)
         plt.scatter(x, y,c=cols, cmap=cmap, edgecolor='none', vmin=vmin, vmax=vmax, alpha=alpha, s=markersize)
-    else: ####uses the real limits of the colouring variable
-        bins= np.linspace(np.min(np.around(p.d[media][strain][colorBy],2)), np.max(np.around(p.d[media][strain][colorBy],2)), nbins)
-        colvec=np.digitize(np.around(p.d[media][strain][colorBy],2), bins)
-        vmin=np.min(colvec)
-        vmax=np.max(colvec)
-        plt.scatter(x, y,c=colvec, cmap=cmap, edgecolor='none', vmin=vmin, vmax= vmax, alpha=alpha, s=markersize)
-    plt.xlabel(xstat)
-    plt.ylabel(ystat)
+    else:
+        if vmin!=0 or vmax!=0: ### if the limits have actually been specified, if no symmetry is demanded then  we do simple routine
+            bins= np.linspace(np.min(np.around(p.d[media][strain][colorBy],2)), np.max(np.around(p.d[media][strain][colorBy],2)), nbins)
+            #colvec=np.digitize(np.around(p.d[media][strain][colorBy],2), bins) #leaving unbinned to see if there is any inconvenient
+            colvec=np.around(p.d[media][strain][colorBy],2) ##rounding the colors and the just plotting
+            plt.scatter(x, y,c=colvec, cmap=cmap, edgecolor='none', vmin=vmin, vmax= vmax, alpha=alpha, s=markersize)
+        else: ####uses the real limits of the colouring variable, binned
+            bins= np.linspace(np.min(np.around(p.d[media][strain][colorBy],2)), np.max(np.around(p.d[media][strain][colorBy],2)), nbins)
+            colvec=np.digitize(np.around(p.d[media][strain][colorBy],2), bins)
+            vmin=np.min(colvec)
+            vmax=np.max(colvec)
+            plt.scatter(x, y,c=colvec, cmap=cmap, edgecolor='none', vmin=vmin, vmax= vmax, alpha=alpha, s=markersize)
+    if xlabel==1:
+        plt.xlabel(xstat)
+    if ylabel==1:
+        plt.ylabel(ystat)
     if addLegend==True:
         f=plt.gcf()
         refaxis = f.add_axes([0.90, .1, 0.05, 0.7])
@@ -223,7 +239,7 @@ def extractTS(df, media, strain, tstype='FLperODTS'):
 
 class accesspr:	
     '''
-    accesspr version 4.5.0 (the number matches with that of the compatible platereader software version)
+    accesspr version 4.5.3 (the number matches with that of the compatible platereader software version)
     
     accesspr is a class that allows to integrate and organize the information
     from many plate reader experiments to produce publication-grade plots and tables. 
@@ -231,15 +247,10 @@ class accesspr:
     to learn about pandas (especially dataframes) and the seaborn graphics package. 
     
     ***Newest FEATURES***
-    default fluorescence channels to be used can now be specified with arguments FL and FLperod.
-    New method called assignFL creates an xpr.FL dictionary, which specifies the main fluorescence channel for each experiment.
-    You can manually change the contents if some experiments were monitored at different gains, channels, etc.
-    Attributes:
-    xpr.experimentDuration. the duration (in hrs) of all experiments
-    xpr.timeStat(), xpr.timeStatAligned() and xpr.timeStatAll() to extract the values
-    of  a variable at a specific time. 
-    See methods.
-    
+    self.serialnumbers, self.machines and self.findMachines() allow to find which PR was used for the experiment.
+    extractAllInfo, timeStat, timeStatAligned and timeStatAll now include a 'machine' field.
+    DFTransform(df, targetVariable, groupVariable, group, scale, shift) allows you to perform a linear transformation of targetVariable
+    *scale+shift, specifically for rows where groupVariable==group **WARNING: this function alters the original dataset for some reason.
     ATTRIBUTES:
     source: 
         the path of the folder that contains the pickle files
@@ -263,6 +274,10 @@ class accesspr:
     FL: 
         a dictionary that contains the default fluorescence channels to be used for every experiment. can be changed manually or by calling
         xpr.assignFL()
+    machines:
+        a dictionary (with experiment keys) that contains the machine in which this experiment was run. currently identified machines are 'Plate Reader 1' and 'Plate Reader 2'
+    serialnumbers:
+        a dictionary (with experiment keys) that contains the machine serial number. even if the machine has no identified human-readable name (see machines), the serialnumber will be stored here.
     METHODS: (*:runs during initialization)
     To create an accesspr object, 
     
@@ -294,6 +309,9 @@ class accesspr:
             if exptColors is not specified, then random colors are assigned to each experiment and returned as a function output.
         plotReplicateMean(self, MEDIA, STRAIN, dtype='')
             uses interpTimes to align and interpolate replicates across experiments and creates a mean± std line plot for each media in MEDIA
+        findMachines()
+            finds the machine wher this experiment was run by looking into several places: first, in pr.machine, then in the experiment file.
+            Returns dictionary self.serialnumbers[EXPERIMENT] ad self.machines[EXPERIMENT], and if no machine is found, self[expt]=np.nan.
     To do platereader-related and other data processing, experiment by experiment,
     
         * alignAll(self): 
@@ -503,6 +521,7 @@ class accesspr:
         '''
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
         '''
+        self.prtype='Tecan'
         self.data = {}
         self.FL={}
         self.experimentDuration={}
@@ -565,6 +584,8 @@ class accesspr:
         self.consensusFLs=[]
         self.consensusFL=[]
         self.consensusFLperod=[]
+        self.machines={}
+        self.serialnumbers={}
         for key in self.data.keys():
             self.FL[key]={}
         try:    
@@ -576,6 +597,37 @@ class accesspr:
         except:
             self.assignFL(mainFL='GFP')
             print('Impossible to find gr. Consider running getstats.')
+        self.findMachines()
+    def findMachines(self):
+        for expt in self.allExperiments:
+            try:
+                self.machines[expt]= self.data[expt].machine
+            except:
+                print('experiment '+expt+' lacking ''machine'' attribute. Attempting retrieval from file...')
+                try:
+                    pth=self.data[expt].wdir + self.data[expt].dname
+                    #print(pth)
+                    xl= pd.ExcelFile(self.data[expt].wdir + self.data[expt].dname)
+                    df= xl.parse()#fixed to sheet 0 just as a temporary patch
+                    #print(df.head(10))
+                    if self.prtype == 'Tecan':
+                        ##getting the serial number of the machine to know whether it is PR1 or PR2
+                        snField=df.keys()[['Tecan i-control 'in j for j in df.keys()]][0] #this gives us the name of the 'infinite' field
+                        try:
+                            self.serialnumbers[expt]=df[snField][0].split('Serial number: ')[1] 
+                        except:
+                            print('problem finding serial number for experiment '+expt+'.')
+                            self.serialnumbers[expt]=''
+                    if self.serialnumbers[expt]=='1006006292':
+                        self.machines[expt]='Plate Reader 1'
+                    else:
+                        if self.serialnumbers[expt]=='1411011275':
+                            self.machines[expt]='Plate Reader 2'
+                        else:
+                            self.machines[expt]='unknown'
+                except:
+                    print('could not extract machine info from source file. Machine left unknown.')					
+                    self.machines[expt]= np.nan
     def assignFL(self, mainFL='noFL', mainFLperod='noFLperod'):
         '''
         every experiment can have their own fluorescence. 
@@ -797,13 +849,15 @@ class accesspr:
             experiments=list(self.data.keys())
         for key in experiments:
             cl=ppf.conditionList(self.data[key], excludeNull=True)
-            for j in range(0, np.size(cl),1):
-                try:
-                    print('experiment', key,'media', cl.values[j,0], 'strain', cl.values[j,1],  ':')
-                    self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype]= ppf.statDerivative(self.data[key], cl.values[j,0],cl.values[j,1], dtype=dtype)
-                except:
-                    print('something went wrong. carrying on.')
-                    continue
+            for j in range(0, np.size(cl,0)):
+                #try:
+                #print(j)
+                print('experiment', key,'media', cl.values[j,0], 'strain', cl.values[j,1],  ':')
+                self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype]= ppf.statDerivative(self.data[key], cl.values[j,0],cl.values[j,1], dtype=dtype)
+                #print(self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype])
+                #except:
+                #    print('something went wrong. carrying on.')
+                #    continue
         
         
     def statByStatScatter(self, media, strain,xstat='OD', ystat='GFP',experiments='all', color='black', indexrange=False):
@@ -948,14 +1002,14 @@ class accesspr:
             plt.fill_between(interpolated['time'], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m ) 
         return col
 
-    def colorScatter(self, media, strain, experiments=False, xstat=False, ystat='FLperod', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=40, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=False):
+    def colorScatter(self, media, strain, experiments=False, xstat=False, ystat='FLperod', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=40, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=False, vmin=0, vmax=0, xlabel=1, ylabel=1):
         if experiments==False:
             self.containssetup(media,strain)
             experiments=self.containslist
         lastexpt=experiments[-1]
         for n in range(0, np.size(experiments)-1):
-            colorScatter(self.data[experiments[n]], media, strain, xstat=xstat, ystat=ystat, colorBy=colorBy, symmetric=symmetric, cmap=cmap,nbins=nbins, extendBy=extendBy, alpha=alpha, markersize=markersize, marker=marker, addLegend=False)
-        colorScatter(self.data[lastexpt], media, strain, xstat=xstat, ystat=ystat, colorBy=colorBy, symmetric=symmetric, cmap=cmap,nbins=nbins, extendBy=extendBy, alpha=alpha, markersize=markersize, marker=marker, addLegend=addLegend)
+            colorScatter(self.data[experiments[n]], media, strain, xstat=xstat, ystat=ystat, colorBy=colorBy, symmetric=symmetric, cmap=cmap,nbins=nbins, extendBy=extendBy, alpha=alpha, markersize=markersize, marker=marker, addLegend=False, vmin=vmin, vmax=vmax, xlabel=xlabel, ylabel=ylabel)
+        colorScatter(self.data[lastexpt], media, strain, xstat=xstat, ystat=ystat, colorBy=colorBy, symmetric=symmetric, cmap=cmap,nbins=nbins, extendBy=extendBy, alpha=alpha, markersize=markersize, marker=marker, addLegend=addLegend, vmin=vmin, vmax=vmax, xlabel=xlabel, ylabel=ylabel)
 
     def plotDefault(self, media, strain, typeofdata, aligned=False):
         D = self.data
@@ -1073,12 +1127,13 @@ class accesspr:
         '''
         it= self.interpTimes(media,strain,dtype=dtype)
         if includeMediaStrain==True:
-            fin=pd.DataFrame( columns= ['experiment', 'media', 'strain']+ times)
+            fin=pd.DataFrame( columns= ['experiment', 'machine','media', 'strain']+ times)
         else:
             fin=pd.DataFrame(columns= times)
         for j in range(0, np.size(it[dtype],1)):
             f = scint.interp1d(it['time'], it[dtype][:,j])
             fin.loc[j, 'experiment']=self.containslist[j]
+            fin.loc[j,'machine']=self.machines[self.containslist[j]]
             fin.loc[j,'media']= media
             fin.loc[j,'strain']= strain
             fin.loc[j,times]= f(times)
@@ -1132,7 +1187,7 @@ class accesspr:
         times= list(np.array(times)[times<= self.interpLimit]) ###we immediately get rid of the times outside the duration of the shortest experiment.
         
         if includeMediaStrain==True: ##whether the user wants to iinclude the media and strain columns
-            fin=pd.DataFrame( columns= ['experiment','media', 'strain']+ times) #preparing the output dataframe with media and strain
+            fin=pd.DataFrame( columns= ['experiment','machine','media', 'strain']+ times) #preparing the output dataframe with media and strain
         else:
             fin=pd.DataFrame( columns= times) #preparing the output dataframe w/o media and strain
         for j in range(0, np.size(expts)): ##loop through experiment names
@@ -1155,6 +1210,7 @@ class accesspr:
                 f = scint.interp1d(self.data[expts[j]].d[media][strain]['time'],  datavals) #create interpolation function
             if includeMediaStrain==True: # add media and strain if required
                 fin.loc[j,'experiment']= expts[j]
+                fin.loc[j,'machine']=self.machines[self.containslist[j]]
                 fin.loc[j,'media']= media
                 fin.loc[j,'strain']= strain
             fin.loc[j,times]= f(times) #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
@@ -1318,7 +1374,6 @@ class accesspr:
         for i in range(0, np.shape(self.containslist)[0]): 
             if ppf.hasKey(self.data[containslist[i]].d, media) and ppf.hasKey(self.data[containslist[i]].d[media], strain):
                 #plt.plot(self.aligned[key], normalizeOverTime(self.data[key], self.media, self.strain), color=col)
-
                 #out= {'normalizedFL': normalizedFLVector, 'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime
                 #print 'strain is ', strain, 'strain is not WT: ', strain != "WT"
                 if strain != 'null':
@@ -1351,7 +1406,7 @@ class accesspr:
                     FLAlignedPeakTime.append(np.nan)
                     FLperodAUC.append(np.nan)
                     halfFLAreaTime.append(np.nan)
-                machine.append(self.data[containslist[i]].machine)
+                machine.append(self.machines[containslist[i]])
                 experiment.append(containslist[i])
                 realTime.append(np.str(self.data[containslist[i]].t.T).replace(']', '').replace('[', '').replace('\n', ''))
                 alignedTime.append(np.str(alignTime(self.data[containslist[i]], media, strain).T).replace(']', '').replace('[', '').replace('\n', '') )
@@ -1362,7 +1417,7 @@ class accesspr:
                 tpr=str(0)+'-'+str(np.size(self.data[containslist[i]].t))
                 timepointRange.append(tpr)
                 iod=np.nanmean(ods[0,:])
-                initialOD.append( iod)
+                initialOD.append(iod)
                 lagTime.append(self.data[containslist[i]].d[media][strain]['lag time'])
                 FinalOD.append(np.nanmean(ods[np.size(ods,0)-1,:]))
                 maxGR.append(self.data[containslist[i]].d[media][strain]['max growth rate'])
@@ -1372,7 +1427,7 @@ class accesspr:
                 medialist.append(media)
                 strainlist.append(strain)
                 grAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, 'gr'))
-                halfGRAreaTime.append(float(halfAUCTime(self.data[containslist[i]], media, strain, 'gr')))
+                halfGRAreaTime.append(float(halfAUCTime(self.data[containslist[i]], media, strain, 'gr')))	
         dataset= list(zip(containslist,machine,medialist, strainlist, initialOD, FinalOD, InitialRawFL, InitialFLperOD, FinalFLperOD, FLPeak, FLAbsPeakTime, FLAlignedPeakTime, lagTime, realTime, alignedTime,FLperODTS, maxGR, maxGRvar, maxGRTime, FLperodAUC, grAUC,halfFLAreaTime,halfGRAreaTime))
         df= pd.DataFrame(data=dataset, columns=self.extractionFields)
         return df
