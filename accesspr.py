@@ -9,6 +9,9 @@ import pandas as pd
 import scipy.interpolate as scint
 from functools import partial
 import prPlottingFunctions as ppf
+from random import choice, randint, sample
+import statsmodels.stats.api as sms
+from matplotlib.colors import hex2color
 #from decimal import *
 #getcontext().prec = 3
 
@@ -39,18 +42,21 @@ def halfAUCIndex(vector):
     return(halfAreaIndex)
 
 def halfAUCTime(p, media, strain, stat, aligned=True):
-    hai=halfAUCIndex(p.d[media][strain][stat])
-    if np.size(hai)>1:
-        print('there is more than one half AUC index for '+strain+' in '+media+'. Choosing the first value.')
-        hai=hai[0][0]
-        print(hai)
-    if np.isnan(hai):
-        return np.nan
-    else:
-        if aligned== False:
-            return(p.t[hai])
+    try:
+        hai=halfAUCIndex(p.d[media][strain][stat])
+        if np.size(hai)>1:
+            print('there is more than one half AUC index for '+strain+' in '+media+'. Choosing the first value.')
+            hai=hai[0][0]
+            print(hai)
+        if np.isnan(hai):
+            return np.nan
         else:
-            return(p.d[media][strain]['Time centered at gr peak'][hai])
+            if aligned== False:
+                return(p.t[hai])
+            else:
+                return(p.d[media][strain]['Time centered at gr peak'][hai])
+    except:
+        return(np.nan)
 
 def extractMagnitude(inputstr, munits='%'):
     d=inputstr.split(' ')[1].split(munits)[0]
@@ -820,27 +826,31 @@ class accesspr:
         '''
         if experiments=='all':
             experiments=list(self.data.keys())
+        self.containsstat('c-'+f[0]+'perod')
         for key in experiments: 
-            if self.statContents.loc[key, 'FLperod']==1 and rerun==False:
-                print('Experiment ', key, ' already contains FLperod')
-                continue
-            for c in refstrain:
-                print('attempting strains containing string ', c)
-                try:
-                    print('experiment', key, ':')
-                    self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=c, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples )
-                    plt.close('all')
-                    break
-                except:
-                    print('something went wrong. carrying on.')
-                    continue
-                    plt.close('all')
+            #if self.statContents.loc[key, 'c-'+f[0]+'perod']==1 and rerun==False:
+            #    print('Experiment ', key, ' already contains FLperod')
+            #    continue
+            whichref= np.where(np.array([c in self.data[key].allstrains for c in refstrain])) #which ref of the ones added is in this experiment
+            localref= np.array(refstrain)[whichref] #hopefully there is never 2 different refs
+            try:
+                print('experiment', key, ':')
+                self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples )
+                plt.close('all')
+                break
+            except: #LinAlgErr:
+                for e in range(2,10):
+                    try:
+                        print('try number '+str(e))
+                        self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples )
+                    except:
+                        print('something went wrong.')
+                plt.close('all')
         if rewrite==True:
             if path.isdir(self.source):
                 pickle.dump(self.data[key], open(self.source + '/' +key, 'wb'))
                 print('Experiment pickle file'+ self.source+key+' has been replaced.')
-        self.containsstat('FLperod')
-
+        self.containsstat('c-'+f[0]+'perod')
 
     def statDerivative(self, dtype='FLperod', experiments='all',media='all', strains='all', rewrite=False, rerun=False):
         ''' function designed to obtain a simple gradient (derivative) of any stat inside the experiments
@@ -854,6 +864,11 @@ class accesspr:
                 #print(j)
                 print('experiment', key,'media', cl.values[j,0], 'strain', cl.values[j,1],  ':')
                 self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype]= ppf.statDerivative(self.data[key], cl.values[j,0],cl.values[j,1], dtype=dtype)
+                maxd=np.nanmax(self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype])
+                self.data[key].d[cl.values[j,0]][cl.values[j,1]]['maxd/dt'+dtype]= maxd
+                miin=np.nanmin(self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype]-maxd)
+                pktime=np.where(self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype]==miin)
+                self.data[key].d[cl.values[j,0]][cl.values[j,1]]['maxd/dt'+dtype+'time']= pktime
                 #print(self.data[key].d[cl.values[j,0]][cl.values[j,1]]['d/dt'+dtype])
                 #except:
                 #    print('something went wrong. carrying on.')
@@ -890,7 +905,24 @@ class accesspr:
                 pickle.dump(self.data[key], open(self.source + '/' +key, 'wb'))
                 print('Experiment pickle file'+ self.source+key+' has been replaced.')
                 
-    
+    def nullDistribution(self, experiments='all', exptColors=0):
+        ''' creates a scatterplot of the OD and Fluorescence of each experiment. the fluorecence
+        chosen depends on the main fluorescence assigned to that experiment.
+        '''
+        if exptColors==0:
+            exptColors= colorDict(keys=xpr.allExperiments)
+        cl= ac.DFsubset(xpr.allContents, 'strain', ['null'])
+        cl=cl.reset_index(drop=True)
+        for j in range(0, np.size(cl, 0)):
+            md=cl.loc[j, 'media']
+            st=cl.loc[j, 'strain']
+            xpr.containssetup(cl.loc[j, 'media'], cl.loc[j, 'strain'], strict=False)
+            expts=xpr.containslist
+        for expt in expts:
+            plt.scatter(xpr.data[expt].d[md][st]['OD'], xpr.data[expt].d[md][st][xpr.FL[expt]['mainFL']], color=exptColors[expt])
+        plt.xlabel('OD of null')
+        plt.ylabel('FL of null')
+        createFigLegend(dic=exptColors)
     def getstats(self, experiments='all', media='all', strain='all', dtype=['OD'], rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
@@ -939,19 +971,31 @@ class accesspr:
         '''
         self.containssetup(media, strain, strict=True)
         #print "Aligning times for each strain from data[]"
-
         for key in self.containslist:
+            flag=0
             if strain== 'null':
-                alignedTimeGR=nan
-                alignedTimeFL=nan
+                alignedTimeGR=np.nan
+                alignedTimeFL=np.nan
             else:
                 mainFL=self.FL[key]['mainFL']
                 mainFLperod=self.FL[key]['mainFLperod']
                 centeredTimeGR=self.data[key].t[np.where(self.data[key].d[media][strain]['gr']==max(self.data[key].d[media][strain]['gr']))]
                 alignedTimeGR=self.data[key].t-centeredTimeGR
-                centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFLperod]==max(self.data[key].d[media][strain][mainFLperod]))]
-                alignedTimeFL=self.data[key].t-centeredTimeFL
-            self.data[key].d[media][strain]['Time centered at flperod peak'] = alignedTimeFL
+                try:
+                    centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFLperod]==max(self.data[key].d[media][strain][mainFLperod]))]
+                except KeyError:
+                    try:
+                        print('Warning: experiment '+key+' does not contain corrected '+mainFLperod+'. Attempting to use raw '+mainFL+' peak') 
+                        centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+'mn']==max(self.data[key].d[media][strain][mainFL+'mn']))]
+                    except:
+                        print('Fluorescence peak failed to be found. setting centered FL time to NaN')
+                        #centeredTimeFL=np.nan #np.matlib.repmat(np.nan,np.size(xpr.data[key].t,0),1).reshape((np.size(xpr.data[key].t,0),))
+                        flag=1
+                if flag==1:
+                    alignedTimeFL=np.matlib.repmat(np.nan,np.size(self.data[key].t,0),1).reshape((np.size(self.data[key].t,0),))
+                else:
+                    alignedTimeFL=self.data[key].t-centeredTimeFL
+            self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
             self.data[key].d[media][strain]['Time centered at gr peak'] = alignedTimeGR
 
     def alignAll(self, rerun=False):
@@ -980,7 +1024,8 @@ class accesspr:
         else:
             print('Experiments have already been aligned. to realign, try rerun=True')
 
-    def plotReplicateMean(self, media, strain, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1):
+    def plotReplicateMean(self, media, strain, experiments='all', dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0):
+        '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
             try:
                 dtype=self.consensusFLperod
@@ -989,18 +1034,42 @@ class accesspr:
         if np.size(media)==1:
             mediaName=media
             media=[media]
+        cv=[]
         for m in media:
-            print('processing '+m)
-            interpolated= self.interpTimes(m, strain, dtype=dtype)
+            #print('processing '+m)
+            interpolated= self.interpTimes(m, strain, dtype=dtype, experiments=experiments)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
             interpolated['time']=interpolated['time'][excludeFirst:excludeLast]
             if normalise==True:
                 interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
             mn=np.nanmean(interpolated[dtype],1)
             sd=np.nanstd(interpolated[dtype],1)
-            plt.plot(interpolated['time'], mn, color=col)
-            plt.fill_between(interpolated['time'], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m ) 
-        return col
+            #calculating the coefficient of variation
+            cv.append(np.nanmean(sd/mn))
+            ##generate bootstrap replicates
+            ncols=np.size(interpolated[dtype], 1)
+            nrows=np.size(interpolated[dtype], 0)
+            reps=mn#np.nans(nrows)#create a dummy column for the bootstraps
+            ###generating new traces  from combining other traces
+            for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
+                ###sample a number of replicates
+                addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                reps=np.column_stack([reps, addmn])
+            if bootstrap>0:
+                totalmn=np.nanmean(reps,1)
+                totalsd=np.nanstd(reps,1)
+                plt.plot(interpolated['time'], totalmn, color=col)
+                plt.fill_between(interpolated['time'], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
+                plt.xlabel('Time centered at gr Peak')
+                plt.ylabel(dtype)
+            else:
+                plt.plot(interpolated['time'], mn, color=col)
+                plt.fill_between(interpolated['time'], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
+                plt.xlabel('Time centered at gr Peak')
+                plt.ylabel(dtype)
+                ###then get their mean
+                ###then add it to the column         
+        return cv
 
     def colorScatter(self, media, strain, experiments=False, xstat=False, ystat='FLperod', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=40, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=False, vmin=0, vmax=0, xlabel=1, ylabel=1):
         if experiments==False:
@@ -1042,7 +1111,7 @@ class accesspr:
         plt.legend(legends, loc = 'upper right')
         plt.show(block=False)
 
-    def plotConditionAligned(self, media, strain, dtype='OD', normalize=0, centerAtFLPeak=0,col='black', range=0):
+    def plotConditionAligned(self, media, strain, dtype='OD', experiments='all', normalize=0, centerAtFLPeak=0,col='black', range=0):
         '''
         Plots the specified datatype for specified condition for all suitable
         experiments in one plot, colouring all of them the same way, allowing to normalize or cnter at fluorescence
@@ -1053,21 +1122,27 @@ class accesspr:
         self.containssetup(media, strain)
         self.media = media
         self.strain = strain
-        
+        expts=self.containslist
         plt.title('aligned '+ dtype + ' over time across replicates', color = 'b')
         timestr=['Time relative to growth rate peak time (hrs)', 'Time relative to Fluorescence peak time (hrs)']
         plt.xlabel(timestr[centerAtFLPeak])
         plt.ylabel(dtype + ' in a.u.')
         legends = []
         if normalize==1:
-            for key in self.containslist: 
+            for key in expts:
+                if experiments!='all': 
+                    if key in experiments==False:
+                        continue 
                 if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
                     and ppf.hasKey(self.data[key].d[media][strain], dtype):
                     plt.plot(self.data[key].d[media][strain]['Time centered at gr peak'], normalizeOverTime(self.data[key], self.media, self.strain, dtype=dtype),color=col)
                     plt.ylabel('normalized '+ dtype + ' in a.u.')
                 else: continue
         else:
-            for key in self.containslist: 
+            for key in expts:
+                if experiments!='all': 
+                    if key in experiments==False:
+                        continue  
                 if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
                     and ppf.hasKey(self.data[key].d[media][strain], dtype):
                     plt.plot(self.data[key].d[media][strain]['Time centered at gr peak'], self.data[key].d[self.media][self.strain][dtype],color=col)
@@ -1102,16 +1177,19 @@ class accesspr:
                 else: continue
         plt.show(block=False)
 
-    def plotRawReplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, exptColors=False):
+    def plotRawReplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, experiments='all', exptColors=False, addLegend=True):
         self.containssetup(media, strain, strict=False)
         if exptColors==False:
             exptColors=dict(zip(self.containslist, ppf.randomColors(np.size(self.containslist))))
         patches=[]
         for x in self.containslist:
+            if experiments!='all' and (x in experiments)==False:
+                continue
             patches.append(pch.Patch(color=exptColors[x]))
             arr=self.data[x].d[media][strain][dtype]
             plt.plot(self.data[x].t, arr, color= exptColors[x])
-        plt.figlegend(patches, self.containslist, 'upper right')
+        if addLegend==True:
+            plt.figlegend(patches, self.containslist, 'upper right')
         plt.title('Replicates of '+strain+ ' in '+media)
         if ylim:
             plt.ylim(ylim)
@@ -1238,9 +1316,12 @@ class accesspr:
                  plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
         plt.figlegend(patches, legs, 'upper right')
         return strainColors
-    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='gr', upperLim=16, exceptionShift=0.01, ignoreExps=False):    
+    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='gr', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
         self.containssetup(media, strain, strict=True, musthave=dtype)
-        experimentList=self.containslist
+        if experiments!='all':
+            experimentList=experiments
+        else:
+            experimentList=self.containslist
         interpRange=[]
         maxLengths=[]
         startPoints=[]
@@ -1248,6 +1329,7 @@ class accesspr:
         for expt in experimentList: ###retireving the limiting values for interpolation amongst all experiments.
             if ignoreExps != False and expt in ignoreExps:
                 continue
+            #print('processing experiment'+expt+'...')
             adjustedTimes[expt]=dict()
             maxLengths.append(np.around(self.data[expt].d[media][strain]['Time centered at gr peak'][-1],2))
             startPoints.append(np.around(self.data[expt].d[media][strain]['Time centered at gr peak'][0],2))
@@ -1338,7 +1420,7 @@ class accesspr:
         
     def extractRepInfo(self, media, strain, strict=True):
         '''
-        generates a table of basic info for all replicates, maybe plots some of them and stores them under self.repInfo[media][strain]
+        generates a table of basic info for all replicates
         '''
         print('extracting '+strain+' in '+media)
         self.containssetup(media, strain, strict=strict)
@@ -1372,14 +1454,22 @@ class accesspr:
         halfFLAreaTime=[]
         halfGRAreaTime=[]
         for i in range(0, np.shape(self.containslist)[0]): 
+            try:
+                nflod=self.FL[containslist[i]]['mainFLperod']
+            except:
+                InitialFLperOD.append(np.nan)
+                FinalFLperOD.append(np.nan)
+                FLPeak.append(np.nan)
+                FLAbsPeakTime.append(np.nan)
+                FLAlignedPeakTime.append(np.nan)
+                FLperodAUC.append(np.nan)
+            nfl=self.FL[containslist[i]]['mainFL']
             if ppf.hasKey(self.data[containslist[i]].d, media) and ppf.hasKey(self.data[containslist[i]].d[media], strain):
                 #plt.plot(self.aligned[key], normalizeOverTime(self.data[key], self.media, self.strain), color=col)
                 #out= {'normalizedFL': normalizedFLVector, 'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime
                 #print 'strain is ', strain, 'strain is not WT: ', strain != "WT"
                 if strain != 'null':
-                    nflod=self.FL[containslist[i]]['mainFLperod']
                     #print('nflod is', nflod)
-                    nfl=self.FL[containslist[i]]['mainFL']
                     #print('nfl is', nfl)
                     out=alignStats(self.data[containslist[i]], media, strain, dtype=nflod)
                     InitialFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][0])

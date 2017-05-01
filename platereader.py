@@ -112,6 +112,7 @@ class platereader:
         self.consist= 2   # number of stds of corrected reference strain data that is considered measurement noise
         rows= 'ABCDEFGH'
         overflow= -999.99
+        self.version='4.5.3'
 
         # correction has not been performed
         self.ODcorrected= False

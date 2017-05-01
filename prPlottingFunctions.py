@@ -9,6 +9,7 @@ from scipy.interpolate import interp1d
 import scipy
 import seaborn as sns
 from numpy.matlib import repmat
+import matplotlib
 
 ###PLATE READER PLOTTING FUNCTIONS VERSION 3.1.0.
 ###By Luis Fernando Montaño. Swain lab, 2016.
@@ -19,6 +20,86 @@ normalodName='OD'
 fitodName='fOD'
 grName='gr'
 
+
+
+def whiteWash(colorhex, num, testplot=False):
+	'''creates a color gradient from colorhex to white in of num steps colorhex is a 
+	'''
+	colornum=matplotlib.colors.hex2color(colorhex)
+	ar1= np.linspace(colornum[0], 1, num)
+	ar2= np.linspace(colornum[1], 1, num)
+	ar3= np.linspace(colornum[2], 1, num)
+	stck= np.column_stack([ar1,ar2, ar3])
+	cmap = matplotlib.colors.ListedColormap(stck, name='from_list', N=None)
+	if testplot==True:
+	    plt.figure()
+	    [plt.plot(np.linspace(0,10,10),np.linspace(0,10*j,10),color=cmap(j)) for j in range(0,num)]
+	return cmap
+
+
+def createFigLegend( keys=0, cols=0, dic=0, loc='upper right'):
+    '''creates an orderly figure legend based on a keys list and a colors list, or alternatively sorting the elements in dic.
+    '''
+    lg=plt.figlegend(handles=[], labels=[], loc=[] )## clearing all previous figure legends. 
+    lg.remove()
+    #if int(keys==0)+int(cols==0)<2 and dic==False:
+    #    print('Insufficient arguments')
+    #    return 0
+    if dic!=False: #if the user u
+        keys= np.sort(list(dic.keys()))
+        cols= list([dic[key] for key in keys])
+    patches=[]
+    lgnds=[]
+    [patches.append(pch.Patch(keys[j], color=cols[j])) for j in range(0, np.size(keys))]
+    [lgnds.append(keys[j]) for j in range(0, np.size(keys))]
+    plt.figlegend(patches, lgnds, loc)
+    
+def colorContour(p,media, strain, xstat, ystat, colorBy, vmin=0, vmax=0, stretch=2, cmap='Spectral', arrow=False, symmetric=False, nbins=100, cutoff=None, color=0):
+    x=p.d[media][strain][xstat]
+    y=p.d[media][strain][ystat]
+    c=p.d[media][strain][colorBy]
+    if symmetric==True:
+    	c, bins=digitizeCentered(c, nbins=nbins, extendBy=1)
+    cmap = matplotlib.cm.get_cmap(cmap)
+    if vmin==0 and vmin==0:
+        vmin=np.nanmin(c)
+        vmax=np.nanmax(c)
+    norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+    for j in range(0, np.size(x, 0)-stretch):
+        if cutoff!=None:
+            #print((np.array(c[j:j+stretch])>= cutoff).sum())
+            if (np.array(p.d[media][strain][colorBy][j:j+stretch])>= cutoff).sum()<1: #if there is no element greater than above, then we skip this loop
+                #print('escaped')
+                continue
+        if arrow==True:
+            #plt.figure()
+            plt.arrow(x[j], y[j], x[j+stretch]-x[j], y[j+stretch]-y[j], head_width=.01, head_length=.01, fc=cmap(norm(c[j+stretch])), ec=cmap(norm(c[j+stretch])))
+            plt.xlim([np.min(x), np.max(x)])
+            plt.ylim([np.min(y), np.max(y)])
+        else:
+            if color!=0:
+                plt.plot(x[j:j+stretch],y[j:j+stretch] ,color=color)
+            else:
+                plt.plot(x[j:j+stretch],y[j:j+stretch] ,color=cmap(norm(c[j+stretch])))
+
+def symmetricMap(poslimit, nbins=10, extendBy=False):
+    ''' 
+    This function creates a symmetric bin set where the edges are -poslimit and poslimit, equally spaced in 10 bins.
+    Extend adds extra bins at the edges.
+    '''
+    if extendBy != False:
+        x, step= np.linspace(-poslimit, poslimit, nbins, retstep=True)
+        bins= np.arange(-poslimit-step*extendBy, poslimit+step*(extendBy+1), step)
+    else:
+        bins=np.linspace(-poslimit, poslimit, nbins)
+    return(bins)
+
+
+def digitizeCentered(vector, nbins=10, bins=False, extendBy=2):
+    vector=np.around(vector,3)
+    bins=symmetricMap(np.max(abs(vector)), nbins=nbins, extendBy=extendBy)
+    digitized= np.digitize(vector, bins=bins)
+    return(digitized, bins) 
 
 def robustCorrect(p, f=['GFP', 'AutoFL'], refstrain='WT'):
     t=0
@@ -36,7 +117,7 @@ def colorDict(keys, colors=0):
     
 def transformStat(p, stat, scale, shift, genericLabel=True):
     '''Generates a linear transformation of expression values'''
-    cl=conditionList(p).values #condition list array
+    cl=conditionList(p, excludeNull=False).values #condition list array
     for media in cl[:,0]:
         for strain in cl[:,1]:
             if genericLabel==False:
@@ -46,30 +127,60 @@ def transformStat(p, stat, scale, shift, genericLabel=True):
     p.mediacorrected.update({'transformed'+stat: False})
     p.datatypes.append('transformed'+stat)       
     p.datatypes=list(np.unique(p.datatypes))
+
+def replaceStat(p, stat,replaceWith=0, genericLabel=True, excludeNull=True):
+    '''replace a pr stat with whatever is in replaceWith. original stat is stored ONLY THE FIRST TIME under stat+original
+    '''    
+    if replaceWith==0:
+        replaceWith='transformed'+stat
+    cl=conditionList(p, excludeNull=excludeNull).values
+    for j in range(0,np.size(cl,0)):
+        media=cl[j,0]
+        strain=cl[j,1]
+        if stat+'original' in p.datatypes:
+            print('Warning: original field has previously been created. Performing only substitution...')
+            p.d[media][strain][stat]=p.d[media][strain][replaceWith] 
+        else:
+            p.d[cl[j,0]][cl[j,1]][stat+'original']=p.d[media][strain][stat]
+            p.d[media][strain][stat]=p.d[media][strain][replaceWith]        
+    p.mediacorrected.update({stat+'original': False})
+    p.datatypes.append(stat+'original')       
+    p.datatypes=list(np.unique(p.datatypes))
     
 def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, jointplot=False): ##performs a linear transformation tailored to every individual channel, 
     '''Generates a linear transformation of expression values'''
     allslopes=[]
     allintercepts=[]
     allrvalues=[]
-    cl=conditionList(p).values #condition list array
-    for media in cl[:,0]:
-        for strain in cl[:,1]:
-            regstats=statCorrelation(p, media, strain, stat1, stat2, plot=plot)
-            scale=regstats.slope
-            shift=regstats.intercept
-            rvalue=regstats.rvalue
-            if genericLabel==False:
-                p.d[media][strain][stat1+'x'+scale+'+'+shift]=p.d[media][strain][stat1]*scale+shift
-            else:
-                p.d[media][strain]['transformed'+stat1]=p.d[media][strain][stat1]*scale+shift
-            allslopes.append(scale)
-            allintercepts.append(shift)
-            allrvalues.append(rvalue)
+    allmedia=[]
+    allstrains=[]
+    cl=conditionList(p, excludeNull=False).values #condition list array
+    for j in range(0, np.size(cl,0)):
+        media=cl[j,0]
+        strain=cl[j,1]
+        #        for strain in cl[:,1]:
+        regstats=statCorrelation(p, media, strain, stat1, stat2, plot=plot)
+        scale=regstats.slope
+        shift=regstats.intercept
+        rvalue=regstats.rvalue
+        if genericLabel==False:
+            p.d[media][strain][stat1+'x'+scale+'+'+shift]=p.d[media][strain][stat1]*scale+shift
+        else:
+            p.d[media][strain]['transformed'+stat1]=p.d[media][strain][stat1]*scale+shift
+            try:
+                p.d[media][strain]['transformed'+stat1+'mn']=p.d[media][strain][stat1+'mn']*scale+shift
+            except:
+                print('there is no existent mn for this field. carrying on')
+        allslopes.append(np.float(scale))
+        allintercepts.append(np.float(shift))
+        allrvalues.append(np.float(rvalue))
+        allmedia.append(media)
+        allstrains.append(strain)
     p.mediacorrected.update({'transformed'+stat1: False})
     p.datatypes.append('transformed'+stat1)       
     p.datatypes=list(np.unique(p.datatypes))
-    df=pd.DataFrame(np.column_stack((np.array(allslopes), np.array(allintercepts), np.array(allrvalues))), columns=['slope', 'intercept', 'rvalue'])
+    print(np.size(np.array(allslopes)))
+    df=pd.DataFrame(np.column_stack((np.array(allmedia),np.array(allstrains), np.array(allslopes), np.array(allintercepts), np.array(allrvalues))), columns=['media', 'strain','slope', 'intercept', 'rvalue'])
     if report==True:
         if jointplot==False:
             if plot==True:
@@ -81,8 +192,7 @@ def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, j
             plt.colorbar()
         else:
             sns.jointplot('slope', 'intercept', data=df)
-    return
-
+    return df.drop_duplicates().reset_index(drop=True)
 
 #### P MEDIA STRAIN modular functions. functions that run given these 3 parameters
 	
@@ -821,14 +931,25 @@ def plotRawODPerStrainRobust(p, mediaColors=0, containsFL=True, xlim= False, yli
     
     
     
-def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=False, newfig=1):
+def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=False, addtofigs=False, addLegend=False):	
+    possibleNewFigs= set(range(1,30))
+    [possibleNewFigs.remove(j) for j in plt.get_fignums()]
     cl= conditionList(p, excludeNull=True)
     if mediaColors==0:
         mediaColors= randomColors(np.size(np.unique(cl['media'])))
         mediaColors= dict(zip(np.unique(cl['media']), mediaColors))
         #print( mediaColors)
-    for  str in p.allstrains:
-        plt.figure();
+    for  j in range(0, np.size(p.allstrains)):
+        str=p.allstrains[j]
+        if addtofigs!=False:
+            #add to figures is supposed to be an array of figure numbers over which we will plot the new plots.
+            #if there are any problems trying to access elements of addtofigs, then we just generate a new figure.
+            try:
+                plt.figure(addtofigs[j])
+            except:
+                plt.figure(possibleNewFigs[j])
+        else:
+            plt.figure()
         sdf= cl[cl['strain']==str]
         sdf=sdf.reset_index()
         #print( sdf)
@@ -849,10 +970,11 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
             plt.title(dtype+' of '+sdf['strain'][x]+' in all media')
             plt.ylabel(dtype)
             plt.xlabel('Time (Hrs)')
-        plt.figlegend(patches, legendNames, 'upper right')
+        if addLegend==True:
+            plt.figlegend(patches, legendNames, 'upper right')
     return mediaColors
     
-def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[]):
+def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False):
     cl= conditionList(p, excludeNull=True)
     if strainColors==0:
         strainColors= randomColors(np.size(np.unique(cl['strain'])))
@@ -888,7 +1010,8 @@ def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=F
             plt.title('Raw '+dtype+' of '+ 'all strains in '+sdf['media'][x])
             plt.ylabel('Raw '+dtype)
             plt.xlabel('Time (Hrs)')
-        plt.figlegend(patches, legendNames, 'upper right')
+        if addLegend==True:
+            plt.figlegend(patches, legendNames, 'upper right')
     return strainColors
     
 def plateReaderFluorescenceReportRobust(p, FL='GFP', plotvar=0, strainColors=0, mediaColors=0, AutoFL=True, tlim=False, odlim=False, FLlim=False, concentrations=0):
@@ -1076,12 +1199,12 @@ def experimentOverview(p, dtype= 'OD', colormap='cool', colorMapRange=False, tim
         media=cl.values[x,0]
         strain=cl.values[x,1]
         conditionCoordinates=[plateCoordinates(a) for a in p.d[media][strain]['plateloc']]
-        print('plateloc: ', p.d[media][strain]['plateloc'])
-        print('conditionCoordinates: ', conditionCoordinates)
+        #print('plateloc: ', p.d[media][strain]['plateloc'])
+        #print('conditionCoordinates: ', conditionCoordinates)
         for cc in range(0,np.size(conditionCoordinates,0)):
-            print('cc is ', cc )
+            #print('cc is ', cc )
             if p.d[media][strain]['plateloc'][cc] in p.ignoredwells:
-                print('well ', p.d[media][strain]['plateloc'][cc], ' is in ignoredwells')
+                #print('well ', p.d[media][strain]['plateloc'][cc], ' is in ignoredwells')
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].plot([1,2,3,4,5,6], [1,2,3,4,5,6], c='red')
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].plot([1,2,3,4,5,6], [6,5,4,3,2,1], c='red')
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_xaxis().set_visible(False)
