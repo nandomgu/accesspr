@@ -1046,7 +1046,6 @@ def plateReaderFluorescenceReportRobust(p, FL='GFP', plotvar=0, strainColors=0, 
 
 ######### MISCELLANEUOUS SMALL FUNCTIONS: these functions are needed throughout and are heavily used by all the above functions. They also have value and usefulness on their own. 
 
-
 def hasKey(obj, k):
     if k in obj.keys():
         return True

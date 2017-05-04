@@ -821,7 +821,7 @@ class accesspr:
         cl=cl.drop_duplicates()
         self.allContents= pd.DataFrame(np.column_stack([cl.values[:,0], cl.values[:,1]]), columns=['media', 'strain'])
 
-    def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False):
+    def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True):
         ''' function designed to run correctauto on all experiments, or combinations of media and strains. 
         '''
         if experiments=='all':
@@ -835,14 +835,14 @@ class accesspr:
             localref= np.array(refstrain)[whichref] #hopefully there is never 2 different refs
             try:
                 print('experiment', key, ':')
-                self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples )
+                self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia )
                 plt.close('all')
                 break
             except: #LinAlgErr:
                 for e in range(2,10):
                     try:
                         print('try number '+str(e))
-                        self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples )
+                        self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia )
                     except:
                         print('something went wrong.')
                 plt.close('all')

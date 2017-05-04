@@ -1,0 +1,1243 @@
+###General plate reader script
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+# def plateReaderProcessingStd(datafolder, datafilename, contentsfilename, dataSheet=['Sheet2','data'], contentsSheet=['Sheet1', 'platemap'],  prname='p', outvar=False):
+# 	if outvar=False:
+# 		outvar=dict()
+# 	dataSheets= pandas.ExcelFile(datafolder+datafilename).sheet_names
+# 	contentsSheets=pandas.ExcelFile(datafolder+contentsfilename).sheet_names
+# 	
+# 	for m in range(0, np.size(dataSheet)):
+# 		for n in range(0, np.size(contentsSheet)):
+# 			try:
+# 				outvar[prname]= pr.platereader(datafolder+datafilename, datafolder+contentsfilename, dsheetname=[m], asheetname=dataSheet[n])
+# 			except XLRDError as xe:
+# 				print('Sheet name not found. trying next name available')
+# 				continue
+# 	  		break
+# 	  		
+
+###############################hxt2 hxt4 experiment from 20160114
+
+mydir= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160114_77_hxt2_hxt4'
+p=pr.platereader('20160120_hxt2_hxt4_concentrations_rep2/20160120_77_hxt2_hxt4_concentrations.xlsx', '20160120_hxt2_hxt4_concentrations_rep2/20160120contents_hxt2hxt4_7concentrations.xls')
+pickle.dump(p, open(homedir+dropboxPath+'/allPicklesNew/p20160120.pkl', 'wb'))
+
+###############################hxt2 hxt4 experiment from 20160119
+
+mydir20160119=  homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160119_hxt2_hxt4'
+p20160119=pr.platereader(mydir20160119+'/20160119_hxt2_hxt4_7concentrations.xlsx', mydir20160119+'/20160119contents_hxt2hxt4_7concentrations.xls')
+pickle.dump(p20160119, open(homedir+dropboxPath+'/allPicklesNew/p20160119.pkl', 'wb'))
+
+
+###############################hxt2 hxt4 experiment from 20160119
+
+
+mydir20160120= homedir+dropboxPath+'/20160120_hxt2_hxt4_concentrations_rep2'
+
+p20160120=pr.platereader(mydir20160120+'/20160120_77_hxt2_hxt4_concentrations.xlsx', mydir20160120+'/20160120contents_hxt2hxt4_7concentrations.xls')
+
+
+
+pickle.dump(p20160120, open(homedir+dropboxPath+'/allPicklesNew/p20160120.pkl', 'wb'))
+
+
+###############################hxt2 hxt4 experiment from 20160128
+
+mydir20160128= homedir+dropboxPath+'/20160128_77_hxt2_hxt4_concentrations_rep3'
+
+p20160128=pr.platereader(mydir20160128+'/20160128_hxt2_hxt4_sheet3.xlsx',mydir20160128+'/20160128contents_hxt2hxt4_7concentrations.xls')
+
+pickle.dump(p20160128, open(homedir+dropboxPath+'/allPicklesNew/p20160128.pkl', 'wb'))
+#p20160128=pickle.load(open(mydir20160128+'/p20160128.pkl', 'rb'))
+
+###################################################
+
+
+mydir20160119= homedir+dropboxPath+'/20160119_hog_sorbitol_7concentrations/'
+
+p20160119=pr.platereader('/20160119_hog_sorbitol_7concentrations/20150119_hog_sorbitol_rep1.xlsx', '20160119_hog_sorbitol_7concentrations/20160119_hog_contents.xls')
+
+pickle.dump(p20160119, open(homedir+dropboxPath+'/allPicklesNew/p20160119Hog.pkl', 'wb'))
+
+
+###############################hog sorbitol rep2
+
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+
+mydir20160120hog= homedir+dropboxPath+ '/20160120_hog_sorbitol_rep2'
+
+p20160120=pr.platereader(mydir20160120hog+'./20160120_hog_sorbitol_rep2/20160120_Hog_sorbitol_rep2.xlsx', mydir20160120hog+'20160120_hog_sorbitol_rep2/20160120_hog_contents.xls')
+####now choose wells to ignore.
+### p.ignorewells(['B1', 'B2'])
+###now use p.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+#p.processWT()
+
+
+
+############################### std1 hxt4 mth1 7 concentrations
+cd Latest_Plate_reader_software_201511/
+import platereader as pr
+import pickle
+
+mydir20160129= homedir+dropboxPath+'/20160129_77_std1_hxt4_mth1_concentrations'
+
+p20160129=pr.platereader(mydir20160129+'/20160129_77_std1_hxt4_mth1_concentrations.xlsx',mydir20160129+ '/20160129contents.xls')
+####now choose wells to ignore.
+p20160129.ignorewells(['D1', 'F5', 'H1'])
+pickle.dump(p2016029, open(homedir+dropboxPath+'/allPicklesNew/p20160129.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160129_77_std1_hxt4_mth1_concentrations/p20160129.pkl', 'rb'))
+
+
+
+mydir20160129= homedir+dropboxPath+'/20160129_77_std1_hxt4_mth1_concentrations'
+
+p20160129=pr.platereader(mydir20160129+'/20160129_77_std1_hxt4_mth1_concentrations.xlsx',mydir20160129+ '/20160129contents.xls')
+####now choose wells to ignore.
+p20160129.ignorewells(['D1', 'F5', 'H1'])
+
+pickle.dump(p20160129, open(homedir+dropboxPath+'/allPicklesNew/p20160129.pkl', 'wb'))
+
+############
+mydir20160130= homedir+dropboxPath+'/20160130_77_std1_hxt4_mth1_concentrationsrep2'
+
+p20160130=pr.platereader(mydir20160130+'/20160130_77_std1_hxt4_mth1_concentrationsrep2.xlsx', mydir20160130+'/20160130contents.xls')
+
+pickle.dump(p20160130, open(homedir+dropboxPath+'/allPicklesNew/p20160130.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160130.pkl', 'rb'))
+
+#####################
+
+
+
+
+
+mydir20160204= homedir+dropboxPath+'/20160204_77_yck1_hxt4_yck2'
+
+p20160204=pr.platereader(mydir20160204+'/20160204_77_yck1_hxt4_yck2_concentrations.xlsx', mydir20160204+'/20160204contents.xls')
+
+pickle.dump(p20160204, open(homedir+dropboxPath+'/allPicklesNew/p20160204.pkl', 'wb'))
+
+##########
+
+mydir20160208= homedir+dropboxPath+'/20160208_77_yck2col1_hxt4_yck2col2'
+
+p20160208=pr.platereader(mydir20160208+'/20160208_77_yck2col1_hxt4_yck2col2.xlsx', mydir20160208+'/20160208contents.xls')
+
+pickle.dump(p20160208, open(homedir+dropboxPath+'/allPicklesNew/p20160208.pkl', 'wb'))
+
+###########
+
+mydir20160211= homedir+dropboxPath+'/20160211_77_yck1_hxt4_yck2_rep2'
+
+p20160211=pr.platereader(mydir20160211+'/20160211_77_yck1_hxt4_yck2_rep2.xlsx', mydir20160211+'/20160211contents.xls')
+
+pickle.dump(p20160211, open(homedir+dropboxPath+'/allPicklesNew/p20160211.pkl', 'wb'))
+
+############
+
+mydir20160212= homedir+dropboxPath+'/20160212_77_hxt1_hxt2_hxt4'
+
+p20160212=pr.platereader(mydir20160212+'/20160212_77_hxt1_hxt2_hxt4.xlsx', mydir20160212+'/20160212contents.xls')
+
+pickle.dump(p20160212, open(homedir+dropboxPath+'/allPicklesNew/p20160212.pkl', 'wb'))
+
+############
+
+mydir20160222= homedir+dropboxPath+'/20160222_77_hxt2_hxt4_yck2'
+
+p20160222=pr.platereader(homedir+dropboxPath+'/allPicklesNew/20160222_77_hxt2_hxt4_yck2.xlsx', mydir20160222+'/20160222contents.xls')
+
+pickle.dump(p20160222, open(homedir+dropboxPath+'/allPicklesNew/p20160222.pkl', 'wb'))
+
+############
+
+
+mydir20160225= homedir+dropboxPath+'/20160225_77_hxt3_hxt5_hxt6'
+
+p20160225=pr.platereader(mydir20160225+'/20160225_77_hxt3_hxt5_hxt6.xlsx', mydir20160225+'/20160225contents.xls', dsheetname='Sheet4')
+
+pickle.dump(p20160225, open(homedir+dropboxPath+'/allPicklesNew/p20160225.pkl', 'wb'))
+
+
+##############
+
+
+
+mydir20160228= homedir+dropboxPath+'/20160228_77_Hxt3_Hxt3Mig2'
+
+p20160228=pr.platereader(mydir20160228+'/20160228_77_hxt3_Hxt3Mig2.xlsx', mydir20160228+'/20160228contents.xls')
+
+pickle.dump(p20160228, open(homedir+dropboxPath+'/allPicklesNew/p20160228.pkl', 'wb'))
+
+##############
+
+mydir20160302= homedir+dropboxPath+'/20160302_77_mig1_hxt4_mig2'
+
+p20160302=pr.platereader(mydir20160302+'/20160302_77_mig1_hxt4_mig2.xlsx', mydir20160302+'/20160302contents.xls')
+
+pickle.dump(p20160302, open(homedir+dropboxPath+'/allPicklesNew/p20160302.pkl', 'wb'))
+
+###############
+
+mydir20160303= homedir+dropboxPath+'/20160303_77_std1_phxt4_hxt7'
+
+p20160303=pr.platereader(mydir20160303+'/20160303_77_std1_phxt4_hxt7.xlsx', mydir20160303+'/20160303contents.xls')
+
+pickle.dump(p20160303, open(homedir+dropboxPath+'/allPicklesNew/p20160303.pkl', 'wb'))
+
+
+############
+
+
+mydir20160323= homedir+dropboxPath+'/20160323_wt_hxt4_snf3col1_snf3col2_rgt2col1_rgt2col2'
+
+p20160323=pr.platereader(mydir20160323+'/20160323_wt_hxt4_snf3col1_snf3col2_rgt2col1_rgt2col2.xlsx', mydir20160323+'/20160323contents.xls')
+
+pickle.dump(p20160323, open(homedir+dropboxPath+'/allPicklesNew/p20160323.pkl', 'wb'))
+
+#############
+
+
+mydir20160331= homedir+dropboxPath+'/20160331_wt_hxt4_mig1col1_mig1col2_mig2col1_mig2col2'
+
+p20160331=pr.platereader(mydir20160331+'/20160331_wt_hxt4_mig1col1_mig1col2_mig2col1_mig2col2.xlsx', mydir20160331+'/20160331contents.xls')
+
+pickle.dump(p20160331, open(homedir+dropboxPath+'/allPicklesNew/p20160331.pkl', 'wb'))
+
+#############
+
+mydir20160403= homedir+dropboxPath+'/20160403_wt_hxt4_mig1col1_mig1col2_mig2col1_mig2col2'
+
+p20160403=pr.platereader(mydir20160403+'/20160403_wt_hxt4_mig1col1_mig1col2_mig2col1_mig2col2.xlsx', mydir20160403+'/20160403contents.xls')
+
+pickle.dump(p20160403, open(homedir+dropboxPath+'/allPicklesNew/p20160403.pkl', 'wb'))
+
+###############
+
+mydir20160412= homedir+dropboxPath+'/20160412_wt_hxt2_hxt4_yck2_GluEthGal'
+
+p20160412=pr.platereader(mydir20160412+'/20160412_wt_hxt2_hxt4_yck2_GluEthGal.xlsx', mydir20160412+'/20160412contents.xls')
+
+pickle.dump(p20160412, open(homedir+dropboxPath+'/allPicklesNew/p20160412.pkl', 'wb'))
+
+###############
+
+
+mydir20160414= homedir+dropboxPath+'/20160414_wt_hxt4_snf3_rgt2'
+
+p20160414=pr.platereader(mydir20160414+'/20160414_wt_hxt4_snf3_rgt2.xlsx', mydir20160414+'/20160414contents.xls')
+
+pickle.dump(p20160414, open(homedir+dropboxPath+'/allPicklesNew/p20160414.pkl', 'wb'))
+
+###############
+
+mydir20160415= homedir+dropboxPath+'/20160415_wt_hxt2_hxt4_yck2_glucMixes'
+
+p20160415=pr.platereader(mydir20160415+'/20160415_wt_hxt2_hxt4_yck2_glucMixes.xlsx', mydir20160415+'/20160415contents.xls')
+
+pickle.dump(p20160415, open(homedir+dropboxPath+'/allPicklesNew/p20160415.pkl', 'wb'))
+
+
+###############
+
+mydir20160417= homedir+dropboxPath+'/20160417_wt_snf3_hxt4_rgt2'
+
+p20160417=pr.platereader(mydir20160417+'/20160417_wt_snf3_hxt4_rgt2.xlsx', mydir20160417+'/20160417contents.xls')
+
+pickle.dump(p20160417, open(homedir+dropboxPath+'/allPicklesNew/p20160417.pkl', 'wb'))
+###############
+
+
+mydir20160525= homedir+dropboxPath+'/20160525_Hxt1_Ish'
+
+p20160525=pr.platereader(mydir20160525+'/20160525_Hxt1_2.xlsx', mydir20160525+'/20160525contents.xls')
+
+
+pickle.dump(p20160525, open(homedir+dropboxPath+'/allPicklesNew/p20160525.pkl', 'wb'))
+
+##############
+
+mydir20160531= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160531_229_hxt4_rgt2_hxt1/'
+
+p20160531=pr.platereader(mydir20160531+'20160531_229_hxt4_rgt2_hxt1.xlsx', mydir20160531+'20160531contents.xls')
+
+
+pickle.dump(p20160531, open(homedir+dropboxPath+'/allPicklesNew/p20160531.pkl', 'wb'))
+
+#######
+
+mydir20160602= homedir+dropboxPath+'/20160602_229_hxt4_rgt2_hxt1'
+
+p20160602=pr.platereader(mydir20160602+'/20160602_229_hxt4_rgt2_hxt1.xlsx', mydir20160602+'/20160602contents.xls')
+####now choose wells to ignore. 
+p20160602.ignorewells(['F10', 'F3', 'D10', 'D3', 'E4', 'E3', 'B6', 'C10', 'E10', 'F4'])
+pickle.dump(p20160602, open(homedir+dropboxPath+'/allPicklesNew/p20160602.pkl', 'wb'))
+
+##############
+mydir20160607= homedir+dropboxPath+'/20160607_229_498_499_rgt2/'
+
+p20160607=pr.platereader(mydir20160607+'/20160607_229_498_499_rgt2.xlsx', mydir20160607+'/20160607contents.xls')
+####now choose wells to ignore. 
+p20160607.ignorewells(['E12', 'B10', 'E7', 'E4', 'B9', 'C11', 'C4', 'C7', 'C2', 'F11', 'F4', 'D7'])
+
+pickle.dump(p20160607, open(homedir+dropboxPath+'/allPicklesNew/p20160607.pkl', 'wb'))
+
+
+###############
+
+
+mydir20160615= homedir+dropboxPath+'/20160615_antimycin'
+
+p20160615=pr.platereader(mydir20160615+'/20160615_229_hxt4_std1_rgt2_yck1_yck2_antimycin.xlsx', mydir20160615+'/20160615contents.xls')
+####now choose wells to ignore. 
+p20160615.ignorewells(['F3', 'E3', 'D3', 'F9', 'E9', 'C9', 'D9', 'F10', 'E10', 'C10', 'D10', 'F4', 'E4', 'C6', 'D4'])
+
+pickle.dump(p20160615, open(homedir+dropboxPath+'/allPicklesNew/p20160615.pkl', 'wb'))
+
+
+################
+
+
+mydir20160620= homedir+dropboxPath+'/20160620_229_409_snf3_rgt2_msn24_gpr1'
+
+p20160620=pr.platereader(mydir20160620+'/20160620_229_409_snf3_rgt2_msn24_gpr1.xlsx', mydir20160620+'/20160620contents.xls')
+
+pickle.dump(p20160620, open(homedir+dropboxPath+'/allPicklesNew/p20160620.pkl', 'wb'))
+
+
+########
+
+
+#####################
+mydir20160609= homedir+dropboxPath+'/20160609_diluteSC_229_Hxt4_rgt2_snf3'
+
+p20160609=pr.platereader(mydir20160609+'/20160609_229_Hxt4_rgt2_snf3.xlsx', mydir20160609+'/20160609contents.xls')
+
+pickle.dump(p20160609, open(homedir+dropboxPath+'/allPicklesNew/p20160609.pkl', 'wb'))
+
+#########
+
+mydir20160816= homedir+dropboxPath+'/20160816_Hxt7Ish'
+
+p20160816=pr.platereader(mydir20160816+'/Hxt7_R1_NOover.xlsx', mydir20160816+'/Hxt7_XZ_GalGlu_template.xlsx', dsheetname='Sheet6')
+p20160816.correctauto()
+p20160816.getstats()
+pickle.dump(p20160816, open(homedir+dropboxPath+'/allPicklesNew/p20160816.pkl', 'wb'))
+
+#####
+
+
+mydir20160815= homedir+dropboxPath+'/20160815_Hxt7Ish_rep2'
+
+p20160815=pr.platereader(mydir20160815+'/Hxt7_R2.xlsx', mydir20160815+'/Hxt7_XZ_GalGlu_template.xlsx')
+p20160815.correctauto()
+p20160815.getstats()
+pickle.dump(p20160815, open(homedir+dropboxPath+'/allPicklesNew/p20160815.pkl', 'wb'))
+
+
+
+###### 
+
+mydir20161022=  homedir+dropboxPath+'/20161022_229_255_409_498_superConcentrated_LFSC/'
+p20161022=pr.platereader(mydir20161022+'20161022_229_255_409_498_7concentrations.xlsx', mydir20161022+'20161022contents.xls')
+p20161022.correctauto()
+p20161022.getstats()
+p20161022.getstats()
+pickle.dump(p20161022, open(homedir+dropboxPath+'/allPicklesNew/p20161022.pkl', 'wb'))
+
+
+
+
+
+###### experiment to check whether different plates,single colonies or day of experiment conditions contribute to variation in OD and Fluorescence
+
+mydir20161023=  homedir+dropboxPath+'/20161023_409_Hxt4_multiple_petri_and_colony_assay'
+p20161023=pr.platereader(mydir20161023+'/20161023_409_hxt4_multiple_petri_and_colony_assay.xlsx', mydir20161023+'/20161023contents.xls')
+#p20161023.correctauto()
+#p20161023.getstats()
+pickle.dump(p20161023, open(homedir+dropboxPath+'/allPicklesNew/p20161023.pkl', 'wb'))
+
+
+
+
+
+#######  experiment to check how the initial od affects Hxt4-yEGFP fluorescence dynamics.  
+
+mydir20161103=  homedir+dropboxPath+'/20161103_multipleODs'
+p20161103=pr.platereader(mydir20161103+'/20161103_multipleODs.xlsx', mydir20161103+'/20161103contents.xls')
+p20161103.ignorewells(['D7', 'E3']) 
+p20161103.correctauto(refstrain='229.WT')
+
+p20161103.getstats()
+pickle.dump(p20161103, open(homedir+dropboxPath+'/allPicklesNew/p20161103.pkl', 'wb'))
+
+#####experiment  to check the expression of pHXT2 and pHXT4 at many concentrations of glucose
+
+mydir20161104=  homedir+dropboxPath+'/20161104_229_pHxt2_pHxt4'
+p20161104=pr.platereader(mydir20161104+'/20161104_229_pHxt2_pHxt4_f.xlsx', mydir20161104+'/20161104contents.xls')
+p20161104.correctauto(refstrain='229.WT')
+p20161104.getstats()
+pickle.dump(p20161104, open(homedir+dropboxPath+'/allPicklesNew/p20161104.pkl', 'wb'))
+
+
+
+### jule's experiment
+
+mydir20161107=  homedir+dropboxPath+'/20161107_jule_ecoli'
+p20161107=pr.platereader(mydir20161107+'/20161107_Jule_raw_data.xlsx', mydir20161107+'/20161107contents.xls')
+#p20161107.correctauto(refstrain='229.WT')
+p20161107.getstats()
+pickle.dump(p20161107, open(homedir+dropboxPath+'/allPicklesNew/p20161107.pkl', 'wb'))
+
+p=pickle.load(open(homedir+dropboxPath+'allPicklesNew/p20161107.pkl', 'rb'))
+
+
+###### Ish's Balaszi experiments
+mydir20170120=  homedir+dropboxPath+'/20160120_ish'
+p20170120=pr.platereader(mydir20170120+'/Balazsi_Strains.2Gal.10-500ngDeocycyline_Test PR1.xlsx', mydir20170120+'/Balaszi_Template_Platereader.xlsx')
+
+
+###20170207 jamie's experiment
+
+mydir20170207= homedir+dropboxPath+'/20170207_jamie_luis'     
+p20170207=pr.platereader(mydir20170207+'/20170207_jamie_luis.xlsx', mydir20170207+'/20170208contents.xls')
+p20170207.ignorewells(['D6'])  
+p20170207.correctauto(refstrain='JA.WT')     
+p20170207.getstats()     
+pickle.dump(p20170207, open(homedir+dropboxPath+'/allPicklesNew/p20170207.pkl', 'wb'))
+
+
+
+###201702221 all Hxts grown in pyruvate for 5 days. 
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170221= homedir+dropboxPath+'/20170221_Hxts_fromPyr'     
+p20170221=pr.platereader(mydir20170221+'/20170221_Hxts_fromPyr.xlsx', mydir20170221+'/20170221contents.xls')
+#plenty of bumpy wells in this experiment.
+p20170221.ignorewells(['E2', 'E3', 'F2', 'F3','D9', 'D10', 'E8', 'E9', 'E10', 'F8', 'F9', 'F10','F11', 'G8', 'G9', 'G10' ])
+p20170221.correctauto(f=['GFP80', 'AutoFL'], refstrain='490.Hxt7w')   
+p20170221.getstats()
+pickle.dump(p20170221, open(homedir+dropboxPath+'/allPickles2017/p20170221.pkl', 'wb'))
+
+###20170307 first batch of Emily's promoters growh in glucose
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170307= homedir+dropboxPath+'/20170307_LuisEmilyPromoters'     
+p20170307=pr.platereader(mydir20170307+'/20170307_LuisEmilyPromoters.xlsx', mydir20170307+'/20170307contents.xls')
+
+p20170307.ignorewells(['C1', 'D1', 'A6', 'D6', 'F1', 'D7','H7', 'H1' ])
+p20170307.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')   
+p20170307.getstats()
+pickle.dump(p20170307, open(homedir+dropboxPath+'/allPickles2017/p20170307.pkl', 'wb'))
+
+
+
+
+
+
+
+strainColors={'MoClo_pGAL1': '#e01e16',
+'MoClo_pGAL10': '#d46d05',
+'MoClo_pHXT4': '#dcbde8',
+'MoClo_pHXT4D004': '#1285a3',
+'MoClo_pHXT4R004': '#e84562',
+'MoClo_pHXT5': '#d3d16c',
+'MoClo_pHXT6': '#61eeeb',
+'MoClo_pRPB18L': '#ec1e5e',
+'MoClo_pSUC2': '#3463d5',
+'MoClo_pTDH3': '#4a489b',
+'WT': '#8e17c5'}
+    
+###201703091 Hxts grown in pyruvate, second replicate
+
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201703091= homedir+dropboxPath+'/201703091_Hxts_fromPyr'     
+p201703091=pr.platereader(mydir201703091+'/201703091_Hxts_fromPyr.xlsx', mydir201703091+'/201703091contents.xls')
+p201703091.ignorewells(['E5', 'F12', 'A12', 'D12' ])
+p201703091.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')   
+p201703091.getstats()
+pickle.dump(p201703091, open(homedir+dropboxPath+'/allPickles2017/p201703091.pkl', 'wb'))
+
+###201703092 pHXT4, Hxt4 and WT
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201703092= homedir+dropboxPath+'/201703092_pHXT4_Hxt4'
+p201703092=pr.platereader(mydir201703092+'/201703092_pHXT4_Hxt4.xlsx', mydir201703092+'/201703092contents.xls')
+p201703092.ignorewells(['A5', 'A6', 'D2', 'B6'])
+pickle.dump(p201703092, open(homedir+dropboxPath+'/allPicklesPromoterProtein/p201703092.pkl', 'wb'))
+
+###20170311 pHXT4, Hxt4 and WT replicate 2
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170311= homedir+dropboxPath+'/20170311_pHXT4_Hxt4'
+p20170311=pr.platereader(mydir20170311+'/20170311_pHXT4_Hxt4.xlsx', mydir20170311+'/20170311contents.xls')
+p20170311.getstats()
+p20170311.correctauto( f=['GFP80', 'AutoFL'], refstrain='REF')
+pickle.dump(p20170311, open(homedir+dropboxPath+'/allPicklesPromoterProtein/p20170311.pkl', 'wb'))
+
+###
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170310= homedir+dropboxPath+'/20170310_Fluorescein'
+p201703101=pr.platereader(mydir20170310+'/20170310_Fluorescein_calibration_platereader1.xlsx', mydir20170310+'/20170310contents.xls')
+
+p201703102=pr.platereader(mydir20170310+'/20170310_Fluorescein_calibration_platereader2.xlsx', mydir20170310+'/20170310contents.xls')
+
+strainColors={'MoClo_pGAL1': '#e01e16',
+'MoClo_pGAL10': '#d46d05',
+'MoClo_pHXT4': '#dcbde8',
+'MoClo_pHXT4D004': '#1285a3',
+'MoClo_pHXT4R004': '#e84562',
+'MoClo_pHXT5': '#d3d16c',
+'MoClo_pHXT6': '#61eeeb',
+'MoClo_pRPB18L': '#ec1e5e',
+'MoClo_pSUC2': '#3463d5',
+'MoClo_pTDH3': '#4a489b',
+'WT': '#8e17c5'}
+
+###
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170318= homedir+dropboxPath+'/20170318_LuisEmilyPromoters'
+p201703181=pr.platereader(mydir20170318+'/20170318_LuisEmilyPromotersPR1.xlsx', mydir20170318+'/20170318contents.xls')
+p201703181.ignorewells(['D11'])
+p201703181.getstats()
+p201703181.correctauto(f=['transformedGFP80', 'AutoFL'], refstrain='WT')
+
+pickle.dump(p201703181, open(homedir+dropboxPath+'/allPickles2017/p201703181.pkl', 'wb'))
+
+
+p201703182=pr.platereader(mydir20170318+'/20170318_LuisEmilyPromotersPR2.xlsx', mydir20170318+'/20170318contents.xls')
+p201703182.ignorewells(['A6'])
+p201703182.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')
+p201703182.getstats()
+pickle.dump(p201703182, open(homedir+dropboxPath+'/allPickles2017/p201703182.pkl', 'wb'))
+
+###
+###20170319 second batch of Emily's promoters growh in glucose
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170319= homedir+dropboxPath+'/20170319_LuisEmilyPromotersBatch2'     
+p20170319=pr.platereader(mydir20170319+'/20170319_LuisEmilyPromoters_Batch2.xlsx', mydir20170319+'/20170319contents.xls')
+p20170319.ignorewells(['H1','H2','H3','H4'])
+p20170319.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')   
+p20170319.getstats()
+pickle.dump(p20170319, open(homedir+dropboxPath+'/allPickles2017/p20170319.pkl', 'wb'))
+
+###20170320 second batch of Emily's promoters growh in glucose
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170320= homedir+dropboxPath+'/20170320_LuisEmilyPromotersBatch2pHXT4'     
+p20170320=pr.platereader(mydir20170320+'/20170320_LuisEmilyPromoters_Batch2pHXT4.xlsx', mydir20170320+'/20170320contents.xls')
+p20170320.ignorewells(['A7', 'C1', 'A3'])
+p20170320.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')   
+p20170320.getstats()
+pickle.dump(p20170320, open(homedir+dropboxPath+'/allPickles2017/p20170320.pkl', 'wb'))
+
+###20170192 pyruvate several days growth 
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201703192= homedir+dropboxPath+'/201703192_pyruvate_several_days'     
+p201703192=pr.platereader(mydir201703192+'/201703192_pyruvate_several_days.xlsx', mydir201703192+'/201703192contents.xls')
+p201703192.ignorewells(['B12', 'C12', 'E8'])
+p201703192.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')   
+p201703192.getstats()
+pickle.dump(p201703192, open(homedir+dropboxPath+'/allPickles2017/p201703192.pkl', 'wb'))
+
+plotRawStatPerMediaRobust(p201703192, strainColors=sequentialColors, dtype='AutoFL')
+plotRawStatPerMediaRobust(p201703192, strainColors=sequentialColors, dtype='GFP80')
+plotRawStatPerMediaRobust(p201703192, strainColors=sequentialColors, dtype='c-GFP80perod')
+plotRawStatPerMediaRobust(p201703192, strainColors=sequentialColors, dtype='OD')
+plotRawStatPerMediaRobust(p201703192, strainColors=sequentialColors, dtype='gr')
+plotRawStatPerStrainRobust(p201703192, dtype='c-GFP80perod')
+
+
+
+####201704021 WT, pHXT4, Hxt4, pADH2e2 in 200 ul and 100 ul
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201704021= homedir+dropboxPath+'/201704021_pHXT4_Hxt4_pADH2e2_100ul'
+p201704021=pr.platereader(mydir201704021+'/201704021_pHXT4_Hxt4_pADH2e2_100ul.xlsx', mydir201704021+'/201704021contents.xls')
+p201704021.ignorewells(['C1','C12', 'G1', 'D1'])
+p201704021.getstats()
+pickle.dump(p201704021, open(homedir+dropboxPath+'/allPicklesPromoterProtein/p201704021.pkl', 'wb'))
+
+
+####201704022 498.Hxt1, MoClo.pHxt1e1 and WT
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201704022= homedir+dropboxPath+'/201704022_Hxt1_pHXT1'
+p201704022=pr.platereader(mydir201704022+'/201704022_Hxt1_pHXT1.xlsx', mydir201704022+'/201704022contents.xls')
+p201704022.ignorewells(['C10', 'D8'])
+p201704022.getstats()
+pickle.dump(p201704022, open(homedir+dropboxPath+'/allPicklesPromoterProtein/p201704022.pkl', 'wb'))
+
+
+
+
+sequentialColors={
+'Hxt1.48h':'#bae4bc',
+'Hxt1.72h':'#7bccc4',
+'Hxt1.96h':'#0868ac',
+'Hxt1.96hFresh':'#c51b8a',
+'WT.48h': '#bae4bc',
+'WT.72h':'#7bccc4',
+'WT.96h': '#0868ac'
+}
+
+###20170330 all Hxts grown in pyruvate, pilot SOP, 0.2% and 2% glucose
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170330= homedir+dropboxPath+'/20170330_Hxts_fromPyr'     
+p20170330=pr.platereader(mydir20170330+'/20170330_Hxts_fromPyr.xlsx', mydir20170330+'/20170330contents.xls')
+pickle.dump(p20170330, open(homedir+dropboxPath+'/allPicklesHXTPyr/p20170330.pkl', 'wb'))
+
+
+###201704012 all Hxts grown in pyruvate, pilot SOP, 0.2% and 2% glucose, second replicate
+
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201704012= homedir+dropboxPath+'/201704012_Hxts_fromPyr'     
+p201704012=pr.platereader(mydir201704012+'/201704012_Hxts_fromPyr.xlsx', mydir201704012+'/201704012contents.xls')
+p201704012.ignorewells(['C7'])
+p201704012.correctauto(f=['GFP80', 'AutoFL'], refstrain='WT')   
+p201704012.getstats()
+pickle.dump(p201704012, open(homedir+dropboxPath+'/allPicklesHXTPyruvate/p201704012.pkl', 'wb'))
+
+
+
+
+###20170331 first batch of Emily's promoters growth in glucose 2% and glucose+ sucrose 2%
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170331= homedir+dropboxPath+'/20170331_LuisEmilyPromotersPR1SUC'     
+p20170331=pr.platereader(mydir20170331+'/20170331_LuisEmilyPromotersPR1SUC.xlsx', mydir20170331+'/20170331contents.xls')
+#p20170331.ignorewells(['A7', 'C1', 'A3'])
+pickle.dump(p20170331, open(homedir+dropboxPath+'/allPickles2017/p20170331.pkl', 'wb'))
+
+
+###201704011 first batch of Emily's promoters growth in glucose 2% and glucose+ sucrose 2%. second replicate
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir201704011= homedir+dropboxPath+'/201704011_LuisEmilyPromotersPR1SUC_2'     
+p201704011=pr.platereader(mydir201704011+'/201704011_LuisEmilyPromotersPR1SUC_2.xlsx', mydir201704011+'/201704011contents.xls')
+p201704011.ignorewells(['B6', 'F10'])
+pickle.dump(p201704011, open(homedir+dropboxPath+'/allPickles2017/p201704011.pkl', 'wb'))
+
+
+###20170427 and 28. glucose dose response of Hxt4, in ∆snf3 and ∆mig1 backgrounds, 7 glucose concentrations
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170427= homedir+dropboxPath+'/20170427_Hxt4_Snf3_Mig1'      
+p20170427=pr.platereader(mydir20170427+'/20170427_hxt4_snf3_mig1.xlsx', mydir20170427+'/20170427contents.xls')
+p20170427.ignorewells('H12', 'E10')
+p20170428=pr.platereader(mydir20170427+'/20170428_hxt4_snf3_mig1_2.xlsx', mydir20170427+'/20170427contents.xls')
+pickle.dump(p20170427, open(homedir+dropboxPath+'/allPickles2017/p20170427.pkl', 'wb'))
+pickle.dump(p20170428, open(homedir+dropboxPath+'/allPickles2017/p20170428.pkl', 'wb'))
+
+
+
+
+
+####Jill experiments
+
+dirJill= homedir+dropboxPath+'/Data_from_Jill_own_analysis/Hxt2347_several_days'
+
+mydir20150718= dirJill+'/Day_1'
+mydir20150719= dirJill+'/Day_2'
+mydir20150720= dirJill+'/Day_3'
+mydir20150721= dirJill+'/Day_4'
+mydir20150722= dirJill+'/Day_5'
+mydir20150723= dirJill+'/Day_6'
+mydir20150724= dirJill+'/Day_7'
+mydir20150725= dirJill+'/Day_8'
+mydir20150726= dirJill+'/Day_9'
+
+
+p20150718=pr.platereader(mydir20150718+'/150718data.xlsx', mydir20150718+'/150718contents.xls')
+pickle.dump(p20150718, open(homedir+dropboxPath+'/allPicklesNew/p20150718.pkl', 'wb'))
+
+p20150719=pr.platereader(mydir20150719+'/150719data.xlsx', mydir20150719+'/150719contents.xls')
+pickle.dump(p20150719, open(homedir+dropboxPath+'/allPicklesNew/p20150719.pkl', 'wb'))
+
+p20150720=pr.platereader(mydir20150720+'/150720data.xlsx', mydir20150720+'/150720contents.xls')
+pickle.dump(p20150720, open(homedir+dropboxPath+'/allPicklesNew/p20150720.pkl', 'wb'))
+
+p20150721=pr.platereader(mydir20150721+'/150721data.xlsx', mydir20150721+'/150721contents.xls')
+pickle.dump(p20150721, open(homedir+dropboxPath+'/allPicklesNew/p20150721.pkl', 'wb'))
+
+p20150722=pr.platereader(mydir20150722+'/150722data.xlsx', mydir20150722+'/150722contents.xls')
+pickle.dump(p20150722, open(homedir+dropboxPath+'/allPicklesNew/p20150722.pkl', 'wb'))
+
+p20150723=pr.platereader(mydir20150723+'/150723data.xlsx', mydir20150723+'/150723contents.xls')
+pickle.dump(p20150723, open(homedir+dropboxPath+'/allPicklesNew/p20150723.pkl', 'wb'))
+
+p20150724=pr.platereader(mydir20150724+'/150724data.xlsx', mydir20150724+'/150724contents.xls')
+pickle.dump(p20150724, open(homedir+dropboxPath+'/allPicklesNew/p20150724.pkl', 'wb'))
+
+p20150725=pr.platereader(mydir20150725+'/150725data.xlsx', mydir20150725+'/150725contents.xls')
+pickle.dump(p20150725, open(homedir+dropboxPath+'/allPicklesNew/p20150725.pkl', 'wb'))
+
+p20150726=pr.platereader(mydir20150726+'/150726data.xlsx', mydir20150726+'/150726contents.xls')
+pickle.dump(p20150726, open(homedir+dropboxPath+'/allPicklesNew/p20150726.pkl', 'wb'))
+
+
+
+ppf.experimentOverview(p20150718, dtype='GFP')
+ppf.experimentOverview(p20150719, dtype='GFP')
+ppf.experimentOverview(p20150720, dtype='GFP')
+ppf.experimentOverview(p20150721, dtype='GFP')
+ppf.experimentOverview(p20150722, dtype='GFP')
+ppf.experimentOverview(p20150723, dtype='GFP')
+ppf.experimentOverview(p20150724, dtype='GFP')
+ppf.experimentOverview(p20150725, dtype='GFP')
+ppf.experimentOverview(p20150726, dtype='GFP')
+
+
+mydir20160609= homedir+dropboxPath+'/20160609_diluteSC_229_Hxt4_rgt2_snf3'
+
+p20160609=pr.platereader(mydir20160609+'/20160609_229_Hxt4_rgt2_snf3.xlsx', mydir20160609+'/20160609contents.xls')
+
+pickle.dump(p20160609, open(homedir+dropboxPath+'/allPicklesNew/p20160609.pkl', 'wb'))
+
+#########PLate reader experiment 20160525 made by ish to screen all hxt1s including mCherry
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160525= homedir+dropboxPath+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160525_Hxt1_Ish/'
+
+p20160525=pr.platereader(mydir20160525+'20160525_Hxt1_2.xlsx', mydir20160525+'20160525contents.xls')
+####now choose wells to ignore. p20160525.ignorewells(['D1', 'F5', 'H1'])
+###no wells ignored
+###now use p20160525.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160525.processWT()
+cd Latest_Plate_reader_software_201511/
+###now correct autofluorescence
+
+p20160525.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160525.odstats('all', 'all')
+
+pickle.dump(p20160525, open(mydir20160525+'/p20160525.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160525.pkl', 'rb'))
+
+
+
+###
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160531= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160531_229_hxt4_rgt2_hxt1/'
+
+p20160531=pr.platereader(mydir20160531+'20160531_229_hxt4_rgt2_hxt1.xlsx', mydir20160531+'20160531contents.xls')
+####now choose wells to ignore. p20160531.ignorewells(['D1', 'F5', 'H1'])
+###no wells ignored
+###now use p20160531.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160531.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160531.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160531.odstats('all', 'all')
+
+pickle.dump(p20160531, open(mydir20160531+'/p20160531.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160531.pkl', 'rb'))
+
+
+###
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160602= homedir+dropboxPath+'/20160602_229_hxt4_rgt2_hxt1'
+
+p20160602=pr.platereader(mydir20160602+'/20160602_229_hxt4_rgt2_hxt1.xlsx', mydir20160602+'/20160602contents.xls')
+####now choose wells to ignore. 
+p20160602.ignorewells(['F10', 'F3', 'D10', 'D3', 'E4', 'E3', 'B6', 'C10', 'E10', 'F4'])
+###no wells ignored
+###now use p20160602.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160602.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160602.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160602.odstats('all', 'all')
+
+pickle.dump(p20160602, open(mydir20160602+'/p20160602.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160602.pkl', 'rb'))
+
+
+###
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160602= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160602_229_hxt4_rgt2_hxt1/'
+
+p20160602=pr.platereader(mydir20160602+'20160602_229_hxt4_rgt2_hxt1.xlsx', mydir20160602+'20160602contents.xls')
+####now choose wells to ignore. 
+p20160602.ignorewells(['E10', 'E3', 'E9', 'C10', 'F3', 'F10', 'F9', 'D10' ,'D3', 'D9', 'B9'])
+###no wells ignored
+###now use p20160602.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160602.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160602.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160602.odstats('all', 'all')
+
+pickle.dump(p20160602, open(mydir20160602+'/p20160602.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160602.pkl', 'rb'))
+
+###
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160607= homedir+dropboxPath+'/20160607_229_498_499_rgt2/'
+
+p20160607=pr.platereader(mydir20160607+'/20160607_229_498_499_rgt2.xlsx', mydir20160607+'/20160607contents.xls')
+####now choose wells to ignore. 
+p20160607.ignorewells(['E12', 'B10', 'E7', 'E4', 'B9', 'C11', 'C4', 'C7', 'C2', 'F11', 'F4', 'D7'])
+
+###no wells ignored
+###now use p20160607.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160607.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160607.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160607.odstats('all', 'all')
+
+pickle.dump(p20160607, open(mydir20160607+'/p20160607.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160607.pkl', 'rb'))
+
+
+
+####
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160609= homedir+dropboxPath+'/20160609_diluteSC_229_Hxt4_rgt2_snf3/'
+
+p20160609=pr.platereader(mydir20160609+'/20160609_229_Hxt4_rgt2_snf3.xlsx', mydir20160609+'/20160609contents.xls')
+####now choose wells to ignore. 
+#p20160609.ignorewells(['D3', 'D10', 'G2', 'F9', 'F4', 'F3', 'F10', 'E4' 'C9', 'C3', 'C10', 'E10', 'E3'])
+###no wells ignored
+###now use p20160609.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160609.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160609.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160609.odstats('all', 'all')
+
+pickle.dump(p20160609, open(mydir20160609+'/p20160609.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160609.pkl', 'rb'))
+
+
+###antimycin experiment 20160615
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160615= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160615_antimycin/'
+
+p20160615=pr.platereader(mydir20160615+'20160615_229_hxt4_std1_rgt2_yck1_yck2_antimycin.xlsx', mydir20160615+'20160615contents.xls')
+####now choose wells to ignore. 
+p20160615.ignorewells(['F3', 'E3', 'D3', 'F9', 'E9', 'C9', 'D9', 'F10', 'E10', 'C10', 'D10', 'F4', 'E4', 'C6', 'D4'])
+###no wells ignored
+###now use p20160615.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160615.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160615.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160615.odstats('all', 'all')
+
+pickle.dump(p20160615, open(mydir20160615+'/p20160615.pkl', 'wb'))
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160615.pkl', 'rb'))
+
+
+
+#####antimycin experiment 20160620
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+### now create the platereader object
+#phog1=pickle.load(open('./20160119_hog_sorbitol_7concentrations/p20160119Hog.pkl', 'rb'))
+
+mydir20160620= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160620_229_409_snf3_rgt2_msn24_gpr1/'
+
+p20160620=pr.platereader(mydir20160620+'20160620_229_409_snf3_rgt2_msn24_gpr1.xlsx', mydir20160620+'20160620contents.xls')
+####now choose wells to ignore. 
+
+###p20160620.ignorewells([]) ###may wells are not great due to bumps but we cannot afford to remove them.
+###no wells ignored
+###now use p20160620.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160620.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160620.correctfef()
+
+###now plot corrected
+###now process odstats for all conditions
+
+p20160620.odstats('all', 'all')
+
+pickle.dump(p20160620, open(mydir20160620+'/p20160620.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160620)
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160620.pkl', 'rb'))
+
+
+
+##### 20160629 week replicate 0.2 1 2
+homedir= '/Users/nandomgu'
+cd /Users/nandomgu/Dropbox/PhD/phd_peter_swain_data/plate_reader_data/PythonScripts/platereader
+import platereader as pr
+import _pickle as pickle
+cd /Users/nandomgu/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160629= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160629_229_hxt4_std1_rgt2_p2_1_2/'
+
+p20160629=pr.platereader(mydir20160629+'20160629_229_hxt4_std1_rgt2_p2_1_2_datasheet.xlsx', mydir20160629+'20160629contents.xls', asheetname='platemap', dsheetname='data')
+####now choose wells to ignore. 
+
+p20160629.ignorewells(['F4', 'E4', 'C10', 'D10', 'E10', 'F10', 'E2', 'F2', 'C8', 'D8' ,'E8', 'F8', 'D11', 'E11', 'F11', 'D3', 'F3', 'E3', 'C9', 'D9', 'E9', 'F9']) ###may wells are not great due to bumps but we cannot afford to remove them.
+###no wells ignored
+###now use p20160629.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+#p20160629.processWT()
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160629.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160629.getstats('all', 'all', esterrs=True)
+
+pickle.dump(p20160629, open(mydir20160629+'/p20160629.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160629)
+saveAllPDF(mydir20160629+'/20160629_Platereader_report.pdf')
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160629.pkl', 'rb'))
+#p.getstrains(strains, condition, nonull=False)
+#getstats(self, conditions='all', strains='all', dtype='OD', bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=True)
+
+##### 20160630 week replicates 0.2 1 2 rep2 for 229 hxt4 std1 and rgt2
+homedir= '/Users/nandomgu'
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160630= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160630_229_hxt4_std1_rgt2_p2_1_2_rep2/'
+
+p20160630=pr.platereader(mydir20160630+'20160630_229_hxt4_std1_rgt2_p2_1_2_rep2.xlsx', mydir20160630+'20160630contents.xls', asheetname='platemap', dsheetname='data')
+####now choose wells to ignore. 
+
+#p20160630.ignorewells() ###may wells are not great due to bumps but we cannot afford to remove them.
+###no wells ignored
+###now use p20160630.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+###now correct autofluorescence
+
+p20160630.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160630.getstats('all', 'all', esterrs=True)
+
+pickle.dump(p20160630, open(mydir20160629+'/p20160630.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160630)
+saveAllPDF(mydir20160630+'/20160630_Platereader_report.pdf')
+###now plot corrected
+###now process odstats for all conditions
+
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160630.pkl', 'rb'))
+
+
+##### 20160701 week replicates 0.2 1 2 rep2 for 229 hxt4 std1 and rgt2
+homedir= '/Users/nandomgu'
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160701= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160701_229_hxt4_std1_rgt2_p4_1_1p5/'
+
+p20160701=pr.platereader(mydir20160701+'20160701_229_hxt4_std1_rgt2_p4_1_1p5.xlsx', mydir20160701+'20160701contents.xls', asheetname='20160701contents', dsheetname='data')
+####now choose wells to ignore. 
+p20160701.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160701.getstats('all', 'all')
+
+pickle.dump(p20160701, open(mydir20160629+'/p20160701.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160701)
+saveAllPDF(mydir20160701+'/20160701_Platereader_report.pdf')
+
+
+
+
+
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160701.pkl', 'rb'))
+
+
+##### 20160702 week replicates 0.2 1 2 rep2 for 229 hxt4 std1 and rgt2
+homedir= '/Users/nandomgu'
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import _pickle as pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160702= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160702_229_hxt4_std1_rgt2_p4_1_1p5/'
+
+p20160702=pr.platereader(mydir20160702+'20160702_229_hxt4_std1_rgt2_p4_1_1p5_rep2.xlsx', mydir20160702+'20160702contents.xls', asheetname='20160702contents', dsheetname='data')
+####now choose wells to ignore. 
+#p20160702.ignorewells(['F4', 'E4', 'C10', 'D10', 'E10', 'F10', 'E2', 'F2', 'C8', 'D8' ,'E8', 'F8', 'D11', 'E11', 'F11', 'D3', 'F3', 'E3', 'C9', 'D9', 'E9', 'F9']) ###may wells are not great due to bumps but we cannot afford to remove them.
+
+
+p20160702.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160702.getstats('all', 'all') ###esterrs=True seems to give me overfitting. 
+
+pickle.dump(p20160702, open(mydir20160629+'/p20160702.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160702)
+saveAllPDF(mydir20160702+'/20160702_Platereader_report.pdf')
+
+##### 20160703 week replicates 0.2 1 2 rep2 for 229 hxt4 std1 and rgt2
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+import platereader as pr
+import _pickle as pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160703= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160703_229_hxt4_std1_rgt2_p6_1_p8/'
+
+p20160703=pr.platereader(mydir20160703+'20160703_229_hxt4_std1_rgt2_p6_1_p8_rep1.xlsx', mydir20160703+'20160703contents.xls', asheetname='20160703contents', dsheetname='data')
+####now choose wells to ignore. 
+
+
+p20160703.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160703.getstats('all', 'all')
+
+pickle.dump(p20160703, open(mydir20160703+'/p20160703.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160703)
+saveAllPDF(mydir20160703+'/20160703_Platereader_report.pdf')
+
+
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160703.pkl', 'rb'))
+
+
+##### 20160704 week replicates 0.2 1 2 rep2 for 229 hxt4 std1 and rgt2
+
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import _pickle as pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160704= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160704_229_hxt4_std1_rgt2_p6_1_p8_rep2/'
+
+p20160704=pr.platereader(mydir20160704+'20160704_229_hxt4_std1_rgt2_p6_1_p8_rep2.xlsx', mydir20160704+'20160704contents.xls', asheetname='20160704contents', dsheetname='data')
+####now choose wells to ignore. 
+
+#p20160704.ignorewells(['F4', 'E4', 'C10', 'D10', 'E10', 'F10', 'E2', 'F2', 'C8', 'D8' ,'E8', 'F8', 'D11', 'E11', 'F11', 'D3', 'F3', 'E3', 'C9', 'D9', 'E9', 'F9']) ###may wells are not great due to bumps but we cannot afford to remove them.
+###no wells ignored
+###now use p20160704.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160704.ignorewells(['H1', 'H2', 'H3'])
+p20160704.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160704.getstats('all', 'all', esterrs=True)
+
+pickle.dump(p20160704, open(mydir20160704+'/p20160704.pkl', 'wb'))
+plateReaderFluorescenceReportRobust(p20160704)
+saveAllPDF(mydir20160704+'/20160704_Platereader_report.pdf')
+
+#p=pickle.load(open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160130_77_std1_hxt4_mth1_concentrationsrep2/p20160704.pkl', 'rb'))
+
+####dump all into allPicklesNew folder
+
+pickle.dump(p20160629, open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/allPicklesNew/p20160629.pkl', 'wb'))
+pickle.dump(p20160630, open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/allPicklesNew/p20160630.pkl', 'wb'))
+pickle.dump(p20160701, open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/allPicklesNew/p20160701.pkl', 'wb'))
+pickle.dump(p20160702, open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/allPicklesNew/p20160702.pkl', 'wb'))
+pickle.dump(p20160703, open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/allPicklesNew/p20160703.pkl', 'wb'))
+pickle.dump(p20160704, open(homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/allPicklesNew/p20160704.pkl', 'wb'))
+
+
+
+####load all pickle files
+
+
+p=pickle.load(open(mydir20160629+'/p20160629.pkl', 'rb'))
+
+
+##### 20160805 pregrowth in gal raf pyr and no sugar
+homedir= '/Users/nandomgu'
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain_data/platereader_data/PythonScripts/platereader
+import platereader as pr
+import _pickle as pickle
+cd /Users/s1259407/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/PythonScripts/platereader
+run  prPlottingFunctions.py
+
+
+mydir20160805= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160805_229_409_GalRafPyrNone/'
+
+p20160805=pr.platereader(mydir20160805+'20160805_229_409_GalRafPyrNone.xlsx', mydir20160805+'20160805contents.xls', asheetname='20160805contents', dsheetname='data')
+####now choose wells to ignore. 
+
+#p20160805.ignorewells(['F4', 'E4', 'C10', 'D10', 'E10', 'F10', 'E2', 'F2', 'C8', 'D8' ,'E8', 'F8', 'D11', 'E11', 'F11', 'D3', 'F3', 'E3', 'C9', 'D9', 'E9', 'F9']) ###may wells are not great due to bumps but we cannot afford to remove them.
+###no wells ignored
+###now use p20160805.plotraw to get rid of poor replicates.
+###now do mediacorrect which is not running for some reason
+### now process the WT
+p20160805.correctauto(refstrain='229.WT')
+#p.correctauto(f=['GFP', 'AutoFL'], conditions='all', strains='all', refstrain='WT', figs=True, correctOD=True, noruns=5, bd=False, no1samples=100)
+###now plot corrected
+###now process odstats for all conditions
+
+p20160805.getstats('all', 'all', esterrs=True)
+
+
+
+
+
+##########################
+
+mydir20160806= homedir+dropboxPath+'/20160806_229_409_galRafPyrNone'
+
+p20160806=pr.platereader(mydir20160806+'/20160806_229_hxt4_GalRafPyrNone_intoGlu1.xlsx', mydir20160806+'/20160806contents.xls')
+
+pickle.dump(p20160806, open(homedir+dropboxPath+'/allPicklesNew/p20160806.pkl', 'wb'))
+
+
+############# This experiment is not great because there is no wild type and because the mCherry was not imaged.
+mydir20160808= homedir+dropboxPath+'/20160808_pHxt2_pHxt4_deletions'
+
+p20160808=pr.platereader(mydir20160808+'/20160808_pHXT2_pHXT4_deletions.xlsx', mydir20160808+'/20160808contents.xls')
+
+pickle.dump(p20160808, open(homedir+dropboxPath+'/allPicklesNew/p20160808.pkl', 'wb'))
+
