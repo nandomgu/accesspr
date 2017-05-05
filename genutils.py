@@ -323,6 +323,18 @@ def rmcolsofnans(a):
 
 
 ######
+def rmnans(a):
+    '''
+    Removes NaN from a 1-D array
+
+    Arguments
+    --
+    a: array of interest
+    '''
+    a= np.asarray(a)
+    return a[~np.isnan(a)]
+
+######
 def plotxyerr(x, y, xerr, yerr, xlabel= 'x', ylabel= 'y', title= '', color= 'b', figref= False):
     '''
     Plots a noisy x versus a noisy y with errorbars shown as ellipses.
@@ -403,3 +415,34 @@ def makerow(v):
     '''
     if np.shape(v)[1] == 1:
         return np.reshape(v, len(v))
+
+#######
+def putpkl(path, item):
+    '''
+    Stores object, including dictionaries, in a pickle file
+
+    Arguments
+    --
+    path: file name
+    item: object to be stored
+    '''
+    import pickle
+    with open(path, 'wb') as file:
+        pickle.dump(item, file, pickle.HIGHEST_PROTOCOL)
+
+
+def getpkl(path):
+    '''
+    Reads an object from a pickle file
+
+    Arguments
+    --
+    path: file name
+    '''
+    import pickle
+    with open(path, 'rb') as file:
+        try:
+            while True:
+                b= pickle.load(file)
+        except EOFError:
+            return b

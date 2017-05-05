@@ -10,20 +10,20 @@ try:
     import seaborn as sns
 except ImportError:
     pass
-
 plt.rcParams['figure.max_open_warning']= 0
+
+
 
 class platereader:
     '''
-    Version 4.5.3: for analyzing platereader data, correcting for autofluorescence, and extracting growth rates
+    for analyzing platereader data, correcting for autofluorescence, and extracting growth rates
 
     A typical work flow is:
 
     import platereader as pr
     p= pr.platereader('GALdata.xls', 'GALcontents.xlsx')
-    p.info()
     p.plot('labels')
-    p.plot(plate= True)
+    p.plot('OD',  plate= True)
     p.plot('OD')
     p.plot(conditionincludes= ['Gal', 'Glu'], strainexcludes= 'HXT7')
     p.correctauto()
@@ -34,7 +34,7 @@ class platereader:
 
     See also http://swainlab.bio.ed.ac.uk/software/platereader/platereader.html
 
-    Wells can be removed using, for example,
+    Wells are removed using, for example,
 
     p.ignorewells(['B1', 'B2'])
 
@@ -44,23 +44,19 @@ class platereader:
 
     p.ignorewells()
 
-    General properties of the data can be accessed directly:
+    General properties of the data are shown with:
 
-    p.allconditions
-    p.allstrains
-    p.alldata
-    p.datatypes
-    p.ignoredwells
+    p.info()
+    p.attributes()
 
-    and are summarized by p.info().
-
-    Dataframes can be created and exported to .xlsx or .csv file. For example,
+    Pandas dataframes can be created to create new plots and to export to .xlsx or .csv file.
+    For example,
 
     p.makedateframe(['OD', 'GFP'], strains= ['WT'])
     p.exportdataframe(ftype= 'csv')
     p.rmdataframe()
 
-    Bounds on the hyperparameters for all Gaussian processes can be changed. For example,
+    Bounds on the hyperparameters for all Gaussian processes can be specified. For example,
 
     p.correctauto(bd= {1: (-6, -4)})
 
@@ -78,7 +74,7 @@ class platereader:
 
     #####
     def __init__(self, dname, aname= 'default', prtype= 'Tecan', wdir= '', dsheetname= 0, asheetname= 0,
-                 ODfname= 'ODcorrection.txt', warn= False, info= True):
+                 ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True, standardgain= False):
         '''
         Requires a data file, fname, (.csv, .txt, .xls, or .xlsx). An annotation file, aname, giving the contents of each well is optional. The plate reader is assumed to be a Tecan machine (but alternatives can in principle be specified using the platereader argument). A working directory can be set using wdir, such as wdir= 'data/'.
 
@@ -93,17 +89,15 @@ class platereader:
         ODfname: file name for dilution data for corrected OD (default is 'ODcorrection.txt')
         warn: if False (default), warnings created by covariance matrices that are not positive semi-definite are stopped
         info: if True (default), display information on the plate after loading
+        standardgain: if defined, fluorescence measurements are corrected to this gain
         '''
-        if not warn:
-            # warning generated occasionally when sampling from the Gaussian process likely because of numerical errors
-            import warnings
-            warnings.simplefilter("ignore", RuntimeWarning)
+        self.version= '4.6'
+        self.dsheetname= dsheetname
+        self.asheetname= asheetname
         if '.' not in dname: dname += '.xlsx'
         # specify working directory
         self.wdir= wdir
         self.dname= dname
-        self.dsheetname=dsheetname
-        self.asheetname=asheetname
         self.ODfname= ODfname
 
         # general parameters
@@ -111,75 +105,46 @@ class platereader:
         self.nosamples= 100  # for estimating error through sampling
         self.consist= 2   # number of stds of corrected reference strain data that is considered measurement noise
         rows= 'ABCDEFGH'
-        overflow= -999.99
-        self.version='4.5.3'
+        self.overflow= -999.99
 
         # correction has not been performed
+        self.standardgain= standardgain
         self.ODcorrected= False
         self.processedref1= False
         self.processedref2= False
-        self.autocorrected= False
+        self.autocorrected= {}
         self.mediacorrected= {}
         self.ignoredwells= []
-        
+        self.negativevalues= False
 
+        if not warn:
+            # warning generated occasionally when sampling from the Gaussian process likely because of numerical errors
+            import warnings
+            warnings.simplefilter("ignore", RuntimeWarning)
+
+        print('Platereader', self.version, ': loading data')
         # define annotation
         if aname == 'default': aname= dname.split('.')[0] + '_contents.xlsx'
         if aname:
             # import annotation
-            r= pd.ExcelFile(self.wdir + aname).parse(asheetname)
+            try:
+                r= pd.ExcelFile(self.wdir + aname).parse(asheetname)
+            except FileNotFoundError:
+                raise(SystemExit("\nError: Can't find " + self.wdir + aname))
         else:
             # no annotation: use wells
             r= [[a + str(j) + ' in unspecified' for j in np.arange(1,13)] for a in rows]
             r= pd.DataFrame(r, index= [a for a in rows], columns= [j for j in np.arange(1,13)])
 
+
         # import data
-        xl= pd.ExcelFile(self.wdir + dname)
-        df= xl.parse(dsheetname)
-        # for Tecan plate reader post 2015
-        if prtype == 'Tecan':
-            ##getting the serial number of the machine to know whether it is PR1 or PR2
-            snField=df.keys()[['Tecan i-control 'in j for j in df.keys()]][0] #this gives us the name of the 'infinite' field
-            self.serialnumber=df[snField][0].split('Serial number: ')[1] 
-            if self.serialnumber=='1006006292':
-                self.machine='Plate Reader 1'
-            else:
-                if self.serialnumber=='1411011275':
-                    self.machine='Plate Reader 2'
-                else:
-                    self.machine=''
-            df= df.replace('OVER', overflow)
-            dlabels= df[df.columns[0]].values
-            # time in hours
-            itime= np.nonzero(dlabels == 'Time [s]')[0]
-            t= df.ix[itime[0]][1:].dropna().values.astype('float')/3600.0
-            # find gains
-            gains= [df.ix[igain][4] for igain in np.nonzero(dlabels == 'Gain')[0]]
-            # indices to extract data
-            idstartindex= 0
-            dstartindex= 1
-            # data types
-            datatypes= [str(df.ix[it-2][0]) for it in itime]
-            nooutchannels= len(datatypes)
-        elif prtype == 'Hidex':
-            dlabels= df[df.columns[0]].values
-            # time in hours
-            itime= np.nonzero(df[df.columns[1]].values == 'Time (s)')[0]
-            t= df.ix[itime[0]][2:].dropna().values.astype('float')/3600.0
-            # indices to extract data
-            idstartindex= 1
-            dstartindex= 2
-            # use default datatypes
-            datatypes= ['nan']*(np.diff(itime)[0]-1)
-            nooutchannels= len(datatypes)
-        else:
-            print('Platereader not recognized')
-            return
+        df, dlabels, gains, datatypes, t, idstartindex, dstartindex= self.importdata(prtype, dname, dsheetname)
         # check data type names are defined otherwise use defaults
         defaults= ['OD'] + ['FL'+ str(i) for i in range(len(datatypes)-1)]
         for j, dtn in enumerate(datatypes):
             if dtn == '' or dtn == 'nan' or (type(dtn) == float and np.isnan(dtn)):
                 datatypes[j]= defaults[j]
+
 
         # create data structure
         nodata= len(t)
@@ -203,11 +168,11 @@ class platereader:
                         # get data
                         id= np.nonzero(dlabels == plateloc)[0][idstartindex:]
                         if np.any(id):
-                            dsub= np.empty((nodata, nooutchannels))
+                            dsub= np.empty((nodata, len(datatypes)))
                             for jd in range(len(id)):
                                 dsub[:,jd]= np.transpose(df.ix[id[jd]][dstartindex:].dropna().values)
                                 # replace overflow values with NaN
-                                dsub[:,jd][dsub[:,jd] == overflow]= np.nan
+                                dsub[:,jd][dsub[:,jd] == self.overflow]= np.nan
                             # add to data structure
                             if condition not in S.keys():
                                 # new condition
@@ -235,13 +200,15 @@ class platereader:
                         print('Ignoring', alabel, '(wrong notation)')
                 except TypeError:
                     print('No label specified for well', plateloc)
-        self.t= t
         self.d= S
+        self.t= t
         self.nodata= nodata
         self.datatypes= datatypes
         self.gains= gains
-        for dn in datatypes: self.mediacorrected[dn]= False
-        self.nooutchannels= nooutchannels
+        for dn in datatypes:
+            self.autocorrected[dn]= False
+            self.mediacorrected[dn]= False
+        self.nooutchannels= len(datatypes)
         self.extractdata()
         self.platelabels= platelabels
         self.allstrains= allstrains
@@ -249,6 +216,60 @@ class platereader:
         self.alldata= list(np.unique(alldata))
         self.importtime= '{:%Y-%b-%d %H:%M:%S}'.format(datetime.datetime.now())
         if info: self.info()
+
+
+    #####
+    def importdata(self, prtype, dname, dsheetname):
+        '''
+        Internal function: Creates and parses dataframe from plate reader Excel file.
+        '''
+        try:
+            xl= pd.ExcelFile(self.wdir + dname)
+        except FileNotFoundError:
+            raise(SystemExit("\nError: Can't find " + self.wdir + dname))
+        df= xl.parse(dsheetname)
+        if prtype == 'Tecan':
+            # for Tecan plate reader post 2015
+            df= df.replace('OVER', self.overflow)
+            dlabels= df[df.columns[0]].values
+            # find plate
+            snField= df.keys()[['Tecan i-control ' in j for j in df.keys()]][0]
+            self.serialnumber= df[snField][0].split('Serial number: ')[1]
+            if self.serialnumber == '1006006292':
+                self.machine= 'Plate Reader 1'
+            elif self.serialnumber == '1411011275':
+                self.machine= 'Plate Reader 2'
+            else:
+                self.machine= 'unknown'
+            # find date of experiment
+            idate= np.nonzero(df[df.columns[0]] == 'Date:')[0][0]
+            self.expdate= df.loc[idate, df.columns[1]]
+            # time in hours
+            itime= np.nonzero(dlabels == 'Time [s]')[0]
+            t= df.ix[itime[0]][1:].dropna().values.astype('float')/3600.0
+            # find gains
+            gains= [df.ix[igain][4] for igain in np.nonzero(dlabels == 'Gain')[0]]
+            # indices to extract data
+            idstartindex= 0
+            dstartindex= 1
+            # data types
+            datatypes= [str(df.ix[it-2][0]) for it in itime]
+        elif prtype == 'Hidex':
+            # Hidex plate reader
+            dlabels= df[df.columns[0]].values
+            # time in hours
+            itime= np.nonzero(df[df.columns[1]].values == 'Time (s)')[0]
+            t= df.ix[itime[0]][2:].dropna().values.astype('float')/3600.0
+            gains= []
+            # indices to extract data
+            idstartindex= 1
+            dstartindex= 2
+            # use default datatypes
+            datatypes= ['nan']*(np.diff(itime)[0]-1)
+        else:
+            print('Platereader not recognized')
+            return
+        return df, dlabels, gains, datatypes, t, idstartindex, dstartindex
 
 
     #####
@@ -271,19 +292,19 @@ class platereader:
                         # extract data
                         od.append(S[c][s]['data'][:,i])
                         for j in range(noout-1):
-                            # correct fluorescence for gain
-                            exec('f' + str(j) + ".append(S[c][s]['data'][:,i+j+1]/self.gains[j])")
+                            if self.standardgain and self.standardgain != self.gains[j]:
+                                # correct fluorescence for gain
+                                cdata= gcm*S[c][s]['data'][:,i+j+1] + gcc
+                                exec('f' + str(j) + ".append(cdata)")
+                            else:
+                                # keep original gain
+                                exec('f' + str(j) + ".append(S[c][s]['data'][:,i+j+1])")
                 # remove ignored wells
                 for p in ignoredwells:
                     S[c][s]['plateloc'].pop(S[c][s]['plateloc'].index(p))
                 S[c][s]['ignoredwells']= list(set(S[c][s]['originalplateloc']) - set(S[c][s]['plateloc']))
                 # store results and means and variances
                 S[c][s][datatypes[0]]= np.transpose(od)
-				#<<<<<<< HEAD
-                if noreps > 1:
-                    #define OD mean and variance and convert to column vector
-                    S[c][s][datatypes[0] + 'mn']= np.mean(od, 0)[:, None].flatten()
-                    S[c][s][datatypes[0] + 'var']= np.var(od, 0)[:, None] .flatten()
                 for i in range(noout-1):
                     exec("S[c][s]['" + datatypes[i+1] + "']= np.transpose(f" + str(i) + ")")
         self.updatemeans()
@@ -346,7 +367,7 @@ class platereader:
         --
         None
         '''
-        print(self.dname.split('.')[0])
+        print('\n'+self.dname.split('.')[0])
         print('---')
         print('Conditions:')
         for c in self.allconditions: print('\t', c)
@@ -358,7 +379,12 @@ class platereader:
                 print('\t', 'null')
                 break
         print('Data types:')
-        for d in self.datatypes: print('\t', d)
+        for i, d in enumerate(self.datatypes):
+            if d == 'OD':
+                print('\t', d)
+            else:
+                print('\t {:10} (gain {:3d})'.format(d, self.gains[i-1]))
+        if self.standardgain: print('Gains normalized to gain', self.standardgain)
         print('Ignored wells:')
         if self.ignoredwells:
             for d in self.ignoredwells: print('\t', d)
@@ -367,71 +393,21 @@ class platereader:
         print('Corrected for nonlinearities in OD:', self.ODcorrected)
         for dn in self.datatypes:
             print(dn + ' corrected for media:', self.mediacorrected[dn])
-        print('Corrected for autofluorescence:', self.autocorrected)
+            if dn != 'OD':
+                print(dn + ' corrected for autofluorescence:', self.autocorrected[dn])
 
 
-
-    #####
-    # OD correction
-    #####
-    def correctOD(self, ODfname= False, figs= True, correctmedia= True):
+    def attributes(self):
         '''
-        Corrects OD data for a non-linear relationship between OD and cell number.
-        Requires a dilution data set in the file ODfname. The default dilution curve is 'ODcorrection.txt' (measured by C Lichten in 2010).
+        Displays the names of the attributes available.
 
         Arguments
         --
-        ODfname: file name for dilution data
-        figs: if True, a plot of the fit to the dilution data is produced
-        correctmedia: if True (default), correct OD measurements by the OD of the media
+        None
         '''
-        if not self.ODcorrected:
-            # correct for media
-            if correctmedia: self.correctmedia()
-            # if no ODfname use the default
-            if not ODfname: ODfname= self.wdir + self.ODfname
-            S, noout= self.d, self.nooutchannels
-            # fit dilution data
-            if not hasattr(self, 'gc'): self.findODcorrection(ODfname, figs)
-            # correct all wells containing strains
-            for c in self.getcons('all', nomedia= True):
-                for s in self.getstrains('all', c):
-                    for i in range(S[c][s]['OD'].shape[1]):
-                        # perform correction
-                        self.gc.predict(S[c][s]['OD'][:,i])
-                        S[c][s]['OD'][:,i]= self.gc.f
-            self.updatemeans()
-            self.ODcorrected= True
-        else:
-            print('OD is already corrected')
-
-
-    #####
-    def findODcorrection(self, ODfname, figs):
-        '''
-        Internal function: Uses a Gaussian process to fit serial dilution data to correct for non-linearities in the relationship between OD and cell density. The data are expected in a file ODfname.
-        '''
-        od, dilfac= np.loadtxt(ODfname, unpack= True)
-        # process data
-        dilfac= dilfac[np.argsort(od)]
-        od= np.sort(od)
-        # run Gaussian process
-        print('Fitting dilution data for OD correction for non-linearities')
-        gc= gp.sqexplinGP({0: (-4, 2), 1: (-3, 1), 2: (-6, 1), 3: (-6, 1)}, od, dilfac)
-        gc.findhyperparameters(noruns= 5, exitearly= True, quiet= True)
-        gc.predict(od)
-        if figs:
-            plt.figure()
-            gc.sketch('.')
-            plt.xlim([0, 1.05*np.max(od)])
-            plt.ylim([0, 1.05*np.max(od)])
-            plt.gca().set_aspect('equal', adjustable='box')
-            plt.draw()
-            plt.xlabel('OD')
-            plt.ylabel('relative cell density')
-            plt.title('function for correcting OD')
-            plt.show(block= False)
-        self.gc= gc
+        ignore= ['d', 'consist', 't', 'nosamples', 'gamma', 'ODfname', 'overflow', 'nooutchannels', 'nodata']
+        for a in self.__dict__:
+            if 'corrected' not in a and 'processed' not in a and a not in ignore: print(a)
 
 
 
@@ -540,14 +516,13 @@ class platereader:
         nomedia: ignores condition= media if True (default)
         nonull: ignores strain= null if True (default)
         '''
-        return [(c,s) for c in self.getcons('all', nomedia= nomedia)
-                for s in self.getstrains('all', c, nonull= nonull)]
-
+        return [(c,s) for c in self.getcons(conditions, nomedia= nomedia, includes= conditionincludes, excludes= conditionexcludes)
+                for s in self.getstrains(strains, c, nonull= nonull, includes= strainincludes, excludes= strainexcludes)]
 
 
     #####
     def getkeys(self, conditions= 'all', strains= 'all', conditionincludes= False, strainincludes= False,
-             conditionexcludes= False, strainexcludes= False):
+             conditionexcludes= False, strainexcludes= False, title= True):
         '''
         Returns the keys (the items) calculated for each strain.
 
@@ -559,20 +534,93 @@ class platereader:
         strainincludes: selects only strains with strainincludes in their name
         conditionexcludes: ignore conditions with conditionexcludes in their name
         strainexcludes: ignore strains with strainexcludes in their name
+        title: display condition and strain
         '''
         S= self.d
         for c in self.getcons(conditions, True, conditionincludes, conditionexcludes):
             for s in self.getstrains(strains, c, True, strainincludes, strainexcludes):
-                print(c, 'in', s, '\n---')
-                for k in sorted(list(S[c][s].keys())): print(k)
+                if title: print(c, 'in', s, '\n---')
+                for k in sorted(list(S[c][s].keys())): print('\t'+k)
                 print('\n')
 
+
+    #####
+    # OD correction
+    #####
+    def correctOD(self, ODfname= False, figs= True, correctmedia= True, conditionincludes= False, strainincludes= False,
+             conditionexcludes= False, strainexcludes= False):
+        '''
+        Corrects OD data for a non-linear relationship between OD and cell number.
+        Requires a dilution data set in the file ODfname. The default dilution curve is 'ODcorrection.txt' (measured by C Lichten in 2010).
+
+        Arguments
+        --
+        ODfname: file name for dilution data
+        figs: if True, a plot of the fit to the dilution data is produced
+        correctmedia: if True (default), correct OD measurements by the OD of the media
+        conditionincludes: selects only conditions with conditionincludes in their name
+        strainincludes: selects only strains with strainincludes in their name
+        conditionexcludes: ignore conditions with conditionexcludes in their name
+        strainexcludes: ignore strains with strainexcludes in their name
+        '''
+        if not self.ODcorrected:
+            # correct for media
+            if correctmedia: self.correctmedia(datatypes= 'OD', conditionincludes= conditionincludes,
+                                               conditionexcludes= conditionexcludes)
+            # if no ODfname use the default
+            if not ODfname: ODfname= self.wdir + self.ODfname
+            S, noout= self.d, self.nooutchannels
+            # fit dilution data
+            if not hasattr(self, 'gc'): self.findODcorrection(ODfname, figs)
+            # correct all wells containing strains
+            for c in self.getcons('all', True, conditionincludes, conditionexcludes):
+                for s in self.getstrains('all', c, False, strainincludes, strainexcludes):
+                    for i in range(S[c][s]['OD'].shape[1]):
+                        # perform correction
+                        self.gc.predict(S[c][s]['OD'][:,i])
+                        S[c][s]['OD'][:,i]= self.gc.f
+            self.updatemeans()
+            self.ODcorrected= True
+        else:
+            print('OD is already corrected')
+
+
+    #####
+    def findODcorrection(self, ODfname, figs):
+        '''
+        Internal function: Uses a Gaussian process to fit serial dilution data to correct for non-linearities in the relationship between OD and cell density. The data are expected in a file ODfname.
+        '''
+        print('Fitting dilution data for OD correction for non-linearities')
+        try:
+            od, dilfac= np.loadtxt(ODfname, unpack= True)
+            print('Using', ODfname)
+        except FileNotFoundError:
+            raise(SystemExit("\nError: Can't find " + ODfname))
+        # process data
+        dilfac= dilfac[np.argsort(od)]
+        od= np.sort(od)
+        # run Gaussian process
+        gc= gp.sqexplinGP({0: (-4, 2), 1: (-3, 1), 2: (-6, 1), 3: (-6, 1)}, od, dilfac)
+        gc.findhyperparameters(noruns= 5, exitearly= True, quiet= True)
+        gc.predict(od)
+        if figs:
+            plt.figure()
+            gc.sketch('.')
+            plt.xlim([0, 1.05*np.max(od)])
+            plt.ylim([0, 1.05*np.max(od)])
+            plt.gca().set_aspect('equal', adjustable='box')
+            plt.draw()
+            plt.xlabel('OD')
+            plt.ylabel('relative cell density')
+            plt.title('function for correcting OD')
+            plt.show(block= False)
+        self.gc= gc
 
 
     #####
     # Media correction
     #####
-    def correctmedia(self, conditions= 'all', datatypes= 'OD', figs= True, noruns= 3, exitearly= False, bd= False,
+    def correctmedia(self, datatypes= 'OD', conditions= 'all', figs= True, noruns= 3, exitearly= False, bd= False,
                      results= False, conditionincludes= False, conditionexcludes= False, mean= False):
         '''
         Corrects OD or fluorescence for the OD or fluorescence of the media. Uses a Gaussian process to fit the time-series of measurements of all replicates of the media and subtracts this time series from the raw data.
@@ -646,7 +694,11 @@ class platereader:
             S[condition][s][dtype] -= np.reshape(np.tile(f, sh[1]), (-1, sh[1]), order= 'F')
             if np.any(S[condition][s][dtype] < 0):
                 print(' Warning: negative data for', s , 'in', condition)
-
+                wstr= '\t' + dtype + ': ' + s + ' in ' + condition + '\n'
+                if not self.negativevalues:
+                    self.negativevalues= wstr
+                else:
+                    self.negativevalues += wstr
 
 
     #####
@@ -655,7 +707,7 @@ class platereader:
     def correctauto(self, f= ['GFP', 'AutoFL'], conditions= 'all', strains= 'all', refstrain= 'WT', figs= True,
                     correctOD= True, noruns= 2, bd= False, no1samples= 100, conditionincludes= False,
                     strainincludes= False, conditionexcludes= False, strainexcludes= False, results= False,
-                    correctmedia= True, mediausemean= False):
+                    correctmedia= True, mediausemean= False, forceprocessref= False):
         '''
         Corrects fluorescence data for autofluorescence in comparison with a reference strain. Emissions can be measured at one or two wavelengths.
 
@@ -675,14 +727,20 @@ class platereader:
         conditionexcludes: ignore conditions with conditionexcludes in their name
         strainexcludes: ignore strains with strainexcludes in their name
         results: if True, display best-fit parameters
-        correctmedia: if True (default), correct for media when using spectral unmixing (two fluoresence measurements) to correct autofluorescence
+        correctmedia: if True (default), correct for media, which is only strictly necessary when using spectral unmixing (two fluoresence measurements) to correct autofluorescence
         mediausemean: if True (default: False), use the mean of the media for correcting (rather than fitting a Gaussian process)
+        forceprocessref: if True (default: False), re-run the processing of the reference strain
         '''
         f= gu.makelist(f)
         S= self.d
-        # check have enough replicates
-        go= True
+        # correct OD
+        if correctOD: self.correctOD(correctmedia= correctmedia, conditionincludes= conditionincludes,
+                                     conditionexcludes= conditionexcludes)
+        # correct autofluorescence
+        print('Using', refstrain, 'as the reference')
         if len(f) == 2:
+            # check have enough replicates
+            go= True
             for c in self.getcons(conditions, True, conditionincludes, conditionexcludes):
                 for s in self.getstrains(strains, c, True, strainincludes, strainexcludes):
                     if S[c][s]['OD'].shape[1] < 2:
@@ -691,36 +749,42 @@ class platereader:
                     if S[c][s][f[0]].shape[1] < 2:
                         print('Not enough fluorescence replicates to correct autofluorescence for', s, 'in', c)
                         go= False
-            if go == False: print('Try specifying just one fluorescence measurement')
-        # perform correction for autofluorescence
-        if go:
-            self.refstrain= refstrain
-            print('Using', refstrain, 'as the reference')
-            # OD correction
-            if correctOD: self.correctOD()
-            # autofluorescence correction
-            if len(f) == 2:
+            if go == False:
+                print('Try specifying just one fluorescence measurement')
+            else:
                 self.correctauto2(f, conditions, strains, refstrain, figs, correctOD, noruns, bd,
                                   conditionincludes, strainincludes, conditionexcludes, strainexcludes,
-                                  results, correctmedia, mediausemean)
-            elif len(f) == 1:
-                self.correctauto1(f, conditions, strains, refstrain, figs, correctOD, noruns, bd, no1samples,
-                                  conditionincludes, strainincludes, conditionexcludes, strainexcludes,
-                                  results)
-            else:
-                print('f must be a list of length 1 or 2')
+                                  results, correctmedia, mediausemean, forceprocessref)
+                if self.negativevalues:
+                    print('Warning: correcting media has created negative data values.')
+                    print('These values have been ignored for:')
+                    print(self.negativevalues)
+        elif len(f) == 1:
+            self.correctauto1(f, conditions, strains, refstrain, figs, correctOD, noruns, bd, no1samples,
+                              conditionincludes, strainincludes, conditionexcludes, strainexcludes,
+                              results, correctmedia, mediausemean, forceprocessref)
+        else:
+            print('f must be a list of length 1 or 2')
+
 
 
     #####
     def correctauto1(self, f, conditions, strains, refstrain, figs, correctOD, noruns, bd, nosamples,
-                     conditionincludes, strainincludes, conditionexcludes, strainexcludes, results):
+                     conditionincludes, strainincludes, conditionexcludes, strainexcludes, results,
+                     correctmedia, mediausemean, forceprocessref):
         '''
         Internal function: Corrects for autofluorescence for experiments with measured emissions at one wavelength using the fluorescence of the wild-type interpolated to the OD of the tagged strain.
         '''
         S= self.d
+        if forceprocessref: self.processedref1= False
+        # correct for media
+        if correctmedia:
+            self.correctmedia(datatypes= f, conditions= conditions, conditionincludes= conditionincludes,
+                              conditionexcludes= conditionexcludes, results= results, mean= mediausemean)
         # process reference strain
         if not self.processedref1:
-            self.processref1(f, conditions, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes, results)
+            self.processref1(f, conditions, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes,
+                             results)
         else:
             print('Reference strain is already processed')
 
@@ -736,8 +800,12 @@ class platereader:
                     # run over all replicates
                     for i in range(noreps):
                         # interpolate WT fluorescence errors to OD values of strain
-                        men= np.interp(S[c][s]['OD'][:,i], S[c][refstrain]['ODmn'],
-                                       S[c][refstrain]['fmerr'])
+                        from scipy.interpolate import interp1d
+                        interpf= interp1d(S[c][refstrain]['ODmn'], S[c][refstrain]['fmerr'])
+                        try:
+                            men= interpf(S[c][s]['OD'][:,i])
+                        except ValueError:
+                            men= np.median(S[c][refstrain]['fmerr'])*np.ones(len(S[c][refstrain]['fmerr']))
                         # predict WT fluorescence at OD values of strain
                         gfr.predict(S[c][s]['OD'][:,i], merrorsnew= men, addnoise= True)
                         # sample for estimating errors
@@ -761,7 +829,10 @@ class platereader:
                     S[c][s][bname + 'var']= fl2/(noreps*nosamples) - S[c][s][bname]**2
                     S[c][s][bname + 'perod']= flperod/(noreps*nosamples)
                     S[c][s][bname + 'perodvar']= flperod2/(noreps*nosamples) - S[c][s][bname + 'perod']**2
-        self.autocorrected= True
+        self.autocorrected[f[0]]= True
+        print('Created:\n' + '\tc-' + f[0] + 'perod (corrected fluorescence per cell)\n' + '\tc-' + f[0]
+              + ' (corrected fluorescence)')
+
 
 
     #####
@@ -806,6 +877,7 @@ class platereader:
                 raise(SystemExit('Fitting reference strain failed'))
             if figs:
                 # plot fit
+                plt.figure()
                 gfr.sketch('o')
                 plt.xlabel('OD')
                 plt.ylabel(f[0])
@@ -823,11 +895,13 @@ class platereader:
 
     #####
     def correctauto2(self, f, conditions, strains, refstrain, figs, correctOD, noruns, bd, conditionincludes,
-                     strainincludes, conditionexcludes, strainexcludes, results, correctmedia, mediausemean):
+                     strainincludes, conditionexcludes, strainexcludes, results, correctmedia, mediausemean,
+                     forceprocessref):
         '''
         Internal function: Corrects for autofluorescence using spectral unmixing for experiments with measured emissions at two wavelengths (following Lichten et al.)
         '''
         S, noout= self.d, self.nooutchannels
+        if forceprocessref: self.processedref2= False
         # correct for media
         if correctmedia:
             self.correctmedia(conditions= conditions, datatypes= f, conditionincludes= conditionincludes,
@@ -850,7 +924,11 @@ class platereader:
                     # estimate error
                     varf= np.var(S[c][s][f[0]], 1)
                     varcf= np.var(S[c][s][f[1]], 1)
-                    gr.predict(S[c][refstrain]['time'], merrorsnew= S[c][refstrain]['qrerr'])
+                    if np.array_equal(S[c][refstrain]['time'], S[c][s]['time']):
+                        gr.predict(S[c][refstrain]['time'], merrorsnew= S[c][refstrain]['qrerr'])
+                    else:
+                        raise(SystemExit('Error: the reference strain is measured at different time points from '
+                                         + s + ' in ' + c))
                     rs= np.transpose(gr.sample(self.nosamples))
                     varfl= np.zeros(nodata)
                     # average variance over samples of ra
@@ -874,22 +952,6 @@ class platereader:
                     flperodvar /= self.nosamples
                     S[c][s][bname + 'perodvar']= flperodvar
                     # calculate corrected levels that are above the expectation from reference strain
-	#<<<<<<< HEAD
-	#                    for ct in ['FL', 'FLperod']:
-    #                	reflevel= np.array(self.consist*np.sqrt(S[c][refstrain]['FLvar']))
-    #                	print('reflevel is ', reflevel)
-    #                	print('c=',c, '.refstrain is ', refstrain, '.odmn is', S[c][refstrain]['ODmn'])
-    #                	if ct == 'FLperod': reflevel /= S[c][refstrain]['ODmn']
-    #                	S[c][s]['c'+ct]= np.zeros(np.size(S[c][s][ct]))
-    #                	S[c][s]['c'+ct+'var']= np.zeros(np.size(S[c][s][ct+'var']))
-    #               	keep= np.nonzero(S[c][s][ct] > reflevel)[0]
-    #               	S[c][s]['c'+ct][keep]= S[c][s][ct][keep]
-    #               	S[c][s]['c'+ct+'var'][keep]= S[c][s][ct+'var'][keep]
-	#	
-	#
-    #####                           
-    #def processref2(self, f, conditions, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes, results): 
-	#=======
                     reflevel= self.consist*np.sqrt(S[c][refstrain][bname + 'var'])
                     keep= np.nonzero(S[c][s][bname] > reflevel)[0]
                     S[c][s]['s' + bname]= np.zeros(np.size(S[c][s][bname]))
@@ -902,11 +964,14 @@ class platereader:
                     S[c][s]['s' + bname + 'perod'][keep]= S[c][s][bname + 'perod'][keep]
                     S[c][s]['s' + bname + 'perodvar']= np.zeros(np.size(S[c][s][bname + 'perodvar']))
                     S[c][s]['s' + bname + 'perodvar'][keep]= S[c][s][bname + 'perodvar'][keep]
-        #self.autocorrected= True
+        self.autocorrected[f[0]]= True
+        print('Created:\n' + '\tc-' + f[0] + 'perod (corrected fluorescence per cell)\n' + '\tc-' + f[0]
+              + ' (corrected fluorescence)\n' + '\tsc-' + f[0]
+              + 'perod (only statistically significant corrected fluorescence per cell)\n' + '\tsc-'
+              + f[0] + ' (only statistically significant corrected fluorescence)')
 
     #####
     def processref2(self, f, conditions, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes, results):
-	#>>>>>>> 2e05fdffbc7353177ec034f7edcbaea63ad25e61
         '''
         Processes reference strain data for spectral unmixing (for experiments with two fluorescence measurements). Uses a Gaussian process to fit the ratio of emitted fluorescence measurements and checks that reference strain data is itself corrected to zero.
 
@@ -931,32 +996,40 @@ class platereader:
         for c in self.getcons(conditions, True, conditionincludes, conditionexcludes):
             print('Processing reference strain for', c)
             noreps= S[c][refstrain][f[0]].shape[1]
+            f0, f1, t= S[c][refstrain][f[0]], S[c][refstrain][f[1]], S[c][refstrain]['time']
+            # find negative values
+            dels= np.unique(np.append(np.nonzero(f0 <= 0)[0], np.nonzero(f1 < 0)[0]))
+            # find values with zero variance
+            dels= np.unique(np.append(dels, np.nonzero(np.var(f1/f0, 1) == 0)[0]))
+            # remove offending values
+            f0r= np.delete(f0, dels, axis= 0)
+            f1r= np.delete(f1, dels, axis= 0)
+            tr= np.delete(t, dels)
             # fit ratio of fluorescence
-            qr= (S[c][refstrain][f[1]]/S[c][refstrain][f[0]]).flatten('F')
-            qrerr= np.var(S[c][refstrain][f[1]]/S[c][refstrain][f[0]], 1)
-            x= np.tile(S[c][refstrain]['time'], noreps)
+            qr= (f1r/f0r).flatten('F')
+            qrerr= np.var(f1r/f0r, 1)
+            x= np.tile(tr, noreps)
             xs= np.sort(x)
             qrs= qr[np.argsort(x)]
             qrerrs= np.repeat(qrerr, noreps)[np.argsort(x)]
             # fit with Gaussian process
-            gr= gp.sqexpGP(b, xs, qrs, merrors= qrerrs)
+            gr= gp.nnGP(b, xs, qrs, merrors= qrerrs)
             try:
+                # add back missing time points
+                if np.any(dels): qrerr= np.interp(t, tr, qrerr)
+                # optimize hyperparameters of Gaussian process
                 gr.findhyperparameters(noruns)
-                if results: gr.results()
-                gr.predict(xs)
+                gr.predict(t, merrorsnew= qrerr)
             except gp.gaussianprocessException:
                 raise(SystemExit('Fitting reference strain failed'))
-            except Exception:
-                import sys
-                print('Unexpected error:', sys.exc_info()[0])
-                raise(SystemExit())
             # store results
             S[c][refstrain]['qr']= qr
             S[c][refstrain]['gpref']= gr
             S[c][refstrain]['qrerr']= qrerr
-            S[c][refstrain]['fratio']= gr.f[::noreps]
+            S[c][refstrain]['fratio']= gr.f
             if figs:
                 # plot fit
+                plt.figure()
                 gr.sketch('o')
                 plt.xlabel('time (hours)')
                 plt.ylabel(f[1] + '/' + f[0])
@@ -974,6 +1047,7 @@ class platereader:
                 plt.figure()
                 plt.plot(S[c][refstrain]['time'], flref, '.')
                 plt.plot(S[c][refstrain]['time'], self.consist*np.sqrt(S[c][refstrain][bname + 'var']), 'r:')
+                plt.plot(S[c][refstrain]['time'], -self.consist*np.sqrt(S[c][refstrain][bname + 'var']), 'r:')
                 plt.plot(S[c][refstrain]['time'], np.zeros(np.size(S[c][refstrain]['time'])), 'k')
                 plt.ylabel('corrected ' + refstrain + ' fluorescence')
                 plt.xlabel('time (hours)')
@@ -998,8 +1072,23 @@ class platereader:
         raa= np.reshape(np.tile(ra, noreps), (np.size(ra), noreps), order= 'F')
         return (raa*fdata - cfdata)/(raa - self.gamma*np.ones(np.shape(raa)))
 
+    #####
+    def reset(self):
+        '''
+        Reset so that all data processing can be re-run.
 
-
+        Arguments
+        --
+        None
+        '''
+        print('Resetting...')
+        self.processedref1= False
+        self.processedref2= False
+        self.ODcorrected= False
+        for dn in self.datatypes:
+            self.autocorrected[dn]= False
+            self.mediacorrected[dn]= False
+        self.extractdata()
 
 
     #####
@@ -1087,19 +1176,15 @@ class platereader:
                         if not ignorestrain:
                             if not onefig: plt.figure()
                             ax= plt.subplot(1,1,1)
-                            if dtype[0] == 'c':
-                                ax.plot(S[c][s]['time'], S[c][s][dtype], '.', label= s + ' in ' + c)
-                            else:
-                                ax.plot(S[c][s]['time'], S[c][s][dtype], '.-', label= s + ' in ' + c)
+                            ax.plot(S[c][s]['time'], S[c][s][dtype], '.', label= s + ' in ' + c)
                             ax.plot(S[c][s]['time'], S[c][s][dtype]+np.sqrt(S[c][s][dtype+'var']), 'k:', alpha=0.4)
                             ax.plot(S[c][s]['time'], S[c][s][dtype]-np.sqrt(S[c][s][dtype+'var']), 'k:', alpha=0.4)
                             rname= 'c-' + dtype.split('-')[1].split('perod')[0]
-                            if rname + 'refstd' in S[c][s].keys():
+                            if rname + 'refstd' in S[c][s]:
                                 if 'perod' in dtype:
                                     ax.plot(S[c][s]['time'], self.consist*S[c][s][rname + 'refstd']/S[c][s]['refODmn'], 'r:')
                                 else:
                                     ax.plot(S[c][s]['time'], self.consist*S[c][s][rname + 'refstd'], 'r:')
-                            ax.set_ylim(bottom= 0)
                             if plotod and not onefig:
                                 # add OD to plot
                                 ax2= ax.twinx()
@@ -1112,12 +1197,15 @@ class platereader:
                         for igwell in self.ignoredwells:
                             if igwell in pls: pls.remove(igwell)
                         # plot each replicate
-                        for i in range(S[c][s][dtype].shape[1]):
-                            if S[c][s][dtype].shape[1] == 1:
-                                label= s + ' in ' + c
-                            else:
-                                label= pls[i] + ': ' + s + ' in ' + c
-                            plt.plot(S[c][s]['time'], S[c][s][dtype][:,i], '.-', label= label)
+                        if S[c][s][dtype].ndim > 1:
+                            for i in range(S[c][s][dtype].shape[1]):
+                                if S[c][s][dtype].shape[1] == 1:
+                                    label= s + ' in ' + c
+                                else:
+                                    label= pls[i] + ': ' + s + ' in ' + c
+                                plt.plot(S[c][s]['time'], S[c][s][dtype][:,i], '.-', label= label)
+                        else:
+                            plt.plot(S[c][s]['time'], S[c][s][dtype], '.-', label= s + ' in ' + c)
                 if not onefig and not ignorestrain:
                     # display and add labels for each plot
                     plt.title(dtype + ' of ' + s + ' in ' + c)
@@ -1128,6 +1216,7 @@ class platereader:
                     else:
                         ax.set_ylabel(dtype)
                         ax2.set_ylabel('mean(OD)')
+                    plt.ylim(ymin= 0)
                     plt.show(block= False)
         if onefig:
             # display and add labels for single figure
@@ -1144,6 +1233,7 @@ class platereader:
                 ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
                 # put legend to the right of the current axis
                 ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+                plt.ylim(ymin= 0)
             plt.show(block= False)
 
 
@@ -1174,6 +1264,7 @@ class platereader:
                 print('Saving', savename)
                 plt.savefig(self.wdir + savename + '.' + ftype)
 
+
     #####
     def close(self):
         '''
@@ -1190,7 +1281,7 @@ class platereader:
     # Statistical analysis
     #####
     def getstats(self, conditions= 'all', strains= 'all', dtype= 'OD', bd= False, cvfn= 'sqexp',
-                 esterrs= False, stats= True, plotodgr= False, conditionincludes= False,
+                 esterrs= False, noruns= 3, stats= True, plotodgr= False, conditionincludes= False,
                  strainincludes= False, conditionexcludes= False, strainexcludes= False):
         '''
         Calls fitderiv.py to estimate the first time-derivate.
@@ -1206,6 +1297,7 @@ class platereader:
         bd: can be used to change the limits on the hyperparameters for the Gaussian process used for the fit. For example, p.odstats('1% Gal', 'GAL2', bd= {1: [-2,-2])}) fixes the flexibility to be 0.01
         cvfn: covariance function used for fit, either 'sqexp' (default) or 'nn'
         esterrs: if True, measurement errors are empirically estimated from the variance across replicates at each time point; if False, the size of the measurement error is fit from the data assuming that this size is the same at all time points
+        noruns: number of attempts made for each fit (default is 3), each run is made with random initial estimates of the parameters
         stats: calculate statistics if True
         plotodgr: for OD data, plots growth rate versus log(OD) if True (default)
         conditionincludes: selects only conditions with conditionincludes in their name
@@ -1227,12 +1319,14 @@ class platereader:
                         logs= True
                     else:
                         esterrs= S[c][s][dtype + 'var']
-                        snames= ['max derivative', 'time of max derivative', 'inverse of max derivative',
+                        snames= ['max derivative', 'time of max derivative',
+                                 'inverse of max derivative',
                                  'max ' + dtype, 'lag time']
                         ylabels= [dtype, 'derivative of ' + dtype]
                         logs= False
-                    f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs, bd= bd, esterrs= esterrs,
-                                statnames= snames, noruns= 3, exitearly= False)
+                    f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs,
+                                bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns,
+                                exitearly= False, linalgmax= 5)
                     plt.figure()
                     plt.subplot(2,1,1)
                     f.plotfit('f', ylabel= ylabels[0], figtitle= figtitle + ' : growth rate')
@@ -1278,13 +1372,18 @@ class platereader:
                 except KeyError:
                     print(dtype, 'is either not yet calculated or not recognized')
                     return
-
+            print('\nProcessed strains now have these keys:')
+            self.getkeys(c, s, title= False)
 
     #####
     def comparegrarea(self, ref, com, figs= True):
         '''
         Calculates the area between two growth rate versus OD curves, normalized by the length
         along the OD-axis where they overlap:
+
+        e.g. p.comparegrarea(['1.9% Raffinose 0.0µg/ml cycloheximide', '77.WT'],
+                             ['1.9% Raffinose 0.5µg/ml cycloheximide', '77.WT'])
+
         Arguments
         --
         ref: [condition, strain] array for the reference
@@ -1312,7 +1411,7 @@ class platereader:
             plt.legend([ref[0] + ' in ' + ref[1], com[0] + ' in ' + com[1]],
                        loc= 'upper left', bbox_to_anchor= (0.5, 1.05))
             plt.title('area between ' + ref[1] + ' in ' + ref[0] + ' and ' + com[1] + ' in ' + com[0])
-            plt.show()
+            plt.show(block= False)
         # perform integration
         from scipy import integrate
         igrand= lambda x: np.abs(i0(x) - i1(x))
@@ -1375,8 +1474,8 @@ class platereader:
         # test if data fields are variables that change with time
         timedata= True
         for dname in dnames:
-            trialdata= S[cs[0]][self.getstrains(strains, cs[0], includes= strainincludes,
-                                                nonull= True)[0]][dname]
+            trialdata= S[cs[0]][self.getstrains(strains, cs[0], True, strainincludes,
+                                                strainexcludes)[0]][dname]
             if type(trialdata) != np.ndarray or len(trialdata) != len(self.t):
                 timedata= False
                 break
@@ -1385,7 +1484,7 @@ class platereader:
             data= {}
             data['Time (hrs)']= self.t
             for c in cs:
-                for s in self.getstrains(strains, c, nonull= nonull, includes= strainincludes):
+                for s in self.getstrains(strains, c,nonull, strainincludes, strainexcludes):
                     for dname in dnames:
                         try:
                             # multi-dimensional array
@@ -1397,13 +1496,12 @@ class platereader:
             df= pd.DataFrame(data)
         else:
             # data fields are not a function of time
-            snames, mnames, data=[], [], []
+            snames, data= [], []
             for c in cs:
-                for s in self.getstrains(strains, c, nonull= nonull, includes= strainincludes):
-                    snames.append(s)
-                    mnames.append(c)
+                for s in self.getstrains(strains, c, nonull, strainincludes, strainexcludes):
+                    snames.append(s + ' in ' + c)
                     data.append([S[c][s][dname] for dname in dnames])
-            df= pd.DataFrame(list(zip(mnames, snames,data)), columns= ['media', 'strain', flatten(dnames)])
+            df= pd.DataFrame(data, index= snames, columns= dnames)
             df.sort_index(inplace= True)
         if hasattr(self, dfname): print('Redefining', dfname)
         setattr(self, dfname, df)
@@ -1443,6 +1541,19 @@ class platereader:
             print('No dataframe', dfname, 'has been created')
 
 
+##########################
+# specialized platereader
+##########################
+
+
+class slpr(platereader):
+
+    def __init__(self, dname, aname= 'default', prtype= 'Tecan', wdir= '', dsheetname= 0, asheetname= 0,
+             ODfname= 'ODcorrection.txt', warn= False, info= True, standardgain= False):
+
+        super().__init__(dname, aname, prtype, wdir, dsheetname, asheetname, ODfname,
+                             warn, info, standardgain)
+        self.__doc__= super().__doc__
 
 
 
