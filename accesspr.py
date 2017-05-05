@@ -245,7 +245,7 @@ def extractTS(df, media, strain, tstype='FLperODTS'):
 
 class accesspr:	
     '''
-    accesspr version 4.5.3 (the number matches with that of the compatible platereader software version)
+    accesspr version 4.6(the number matches with that of the compatible platereader software version)
     
     accesspr is a class that allows to integrate and organize the information
     from many plate reader experiments to produce publication-grade plots and tables. 
@@ -532,7 +532,7 @@ class accesspr:
         self.FL={}
         self.experimentDuration={}
         self.source = source
-        self.version='4.5.1'
+        self.version='4.6'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
        #print "The given path exists: ";#print path.exists(self.source)
        #print "The given path is a directory: ";#print path.isdir(self.source)
