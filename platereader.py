@@ -1325,8 +1325,7 @@ class platereader:
                         ylabels= [dtype, 'derivative of ' + dtype]
                         logs= False
                     f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs,
-                                bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns,
-                                exitearly= False, linalgmax= 5)
+                                bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns ,exitearly= False, linalgmax= 5)
                     plt.figure()
                     plt.subplot(2,1,1)
                     f.plotfit('f', ylabel= ylabels[0], figtitle= figtitle + ' : growth rate')

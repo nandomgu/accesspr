@@ -115,9 +115,9 @@ def colorDict(keys, colors=0):
         colors= randomColors(np.size(keys))
     return dict(zip(keys, colors))
     
-def transformStat(p, stat, scale, shift, genericLabel=True):
+def transformStat(p, stat, scale, shift, genericLabel=True, excludeNull=False):
     '''Generates a linear transformation of expression values'''
-    cl=conditionList(p, excludeNull=False).values #condition list array
+    cl=conditionList(p, excludeNull=excludeNull).values #condition list array
     for media in cl[:,0]:
         for strain in cl[:,1]:
             if genericLabel==False:
@@ -144,7 +144,7 @@ def replaceStat(p, stat,replaceWith=0, genericLabel=True, excludeNull=True):
             p.d[cl[j,0]][cl[j,1]][stat+'original']=p.d[media][strain][stat]
             p.d[media][strain][stat]=p.d[media][strain][replaceWith]        
     p.mediacorrected.update({stat+'original': False})
-    p.datatypes.append(stat+'original')       
+    #p.datatypes.append(stat+'original')       
     p.datatypes=list(np.unique(p.datatypes))
     
 def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, jointplot=False): ##performs a linear transformation tailored to every individual channel, 
@@ -931,7 +931,7 @@ def plotRawODPerStrainRobust(p, mediaColors=0, containsFL=True, xlim= False, yli
     
     
     
-def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=False, addtofigs=False, addLegend=False):	
+def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=False, addtofigs=False, addLegend=False, xstat='time'):	
     possibleNewFigs= set(range(1,30))
     [possibleNewFigs.remove(j) for j in plt.get_fignums()]
     cl= conditionList(p, excludeNull=True)
@@ -959,22 +959,29 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
             legendNames.append(sdf['media'][x])
             patches.append(pch.Patch(color=mediaColors[sdf['media'][x]], label=sdf['media'][x]))
             arr=p.d[sdf['media'][x]][sdf['strain'][x]][dtype]
+            try:
+                a=p.d[sdf['media'][x]][sdf['strain'][x]][xstat]
+            except KeyError:
+                continue
             if np.size(np.shape(arr))==1:
-                plt.plot(p.t, arr, color= mediaColors[sdf['media'][x]], label=sdf['media'][x])
+                plt.plot(p.d[sdf['media'][x]][sdf['strain'][x]][xstat], arr, color= mediaColors[sdf['media'][x]], label=sdf['media'][x])
             else:
-                plt.plot(p.t, arr, color= mediaColors[sdf['media'][x]], label=sdf['media'][x])
+                plt.plot(p.d[sdf['media'][x]][sdf['strain'][x]][xstat], arr, color= mediaColors[sdf['media'][x]], label=sdf['media'][x])
             if xlim !=False:
                 plt.xlim(xlim)
             if ylim != False:
                 plt.ylim(ylim)
             plt.title(dtype+' of '+sdf['strain'][x]+' in all media')
             plt.ylabel(dtype)
-            plt.xlabel('Time (Hrs)')
+            if xstat=='time':
+                plt.xlabel('Time (Hrs)')
+            else:
+                plt.xlabel(xstat)
         if addLegend==True:
             plt.figlegend(patches, legendNames, 'upper right')
     return mediaColors
     
-def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False):
+def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False, xstat='time'):
     cl= conditionList(p, excludeNull=True)
     if strainColors==0:
         strainColors= randomColors(np.size(np.unique(cl['strain'])))
@@ -991,25 +998,32 @@ def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=F
             if sdf['strain'][x] in ignoreStrains:
                 continue
             arr=p.d[sdf['media'][x]][sdf['strain'][x]][dtype]
+            try:
+                a=p.d[sdf['media'][x]][sdf['strain'][x]][xstat]
+            except KeyError:
+                continue
             #print(sdf['media'][x])
             legendNames.append(sdf['strain'][x])
             patches.append(pch.Patch(color=strainColors[sdf['strain'][x]], label=sdf['strain'][x]))
             if np.size(np.shape(arr))==1:
                 if normalize==True:
                     arr=(arr-np.min(arr))/np.max(arr-np.min(arr))
-                plt.plot(p.t, arr, color= strainColors[sdf['strain'][x]], label=sdf['media'][x])
+                plt.plot(p.d[sdf['media'][x]][sdf['strain'][x]][xstat], arr, color= strainColors[sdf['strain'][x]], label=sdf['media'][x])
             else:
                 if normalize==True:
                     for j in range(1,np.size(arr,1)):
                         arr[:, j]=(arr[:,j]-np.min(arr[:,j]))/np.max(arr[:,j]-np.min(arr[:,j]))
-                plt.plot(p.t, arr, color= strainColors[sdf['strain'][x]], label=sdf['media'][x])
+                plt.plot(p.d[sdf['media'][x]][sdf['strain'][x]][xstat], arr, color= strainColors[sdf['strain'][x]], label=sdf['media'][x])
             if xlim !=False:
                 plt.xlim(xlim)
             if ylim != False:
                 plt.ylim(ylim)
             plt.title('Raw '+dtype+' of '+ 'all strains in '+sdf['media'][x])
             plt.ylabel('Raw '+dtype)
-            plt.xlabel('Time (Hrs)')
+            if xstat=='time':
+                plt.xlabel('Time (Hrs)')
+            else:
+                plt.xlabel(xstat)
         if addLegend==True:
             plt.figlegend(patches, legendNames, 'upper right')
     return strainColors

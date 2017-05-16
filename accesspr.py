@@ -571,22 +571,22 @@ class accesspr:
         self.refstrains=dict()
         self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
         self.statContents=pd.DataFrame(columns=['FLperod', 'gr'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.containsstat('gr')
-        self.containsstat('GFP')
-        self.containsstat('c-GFPperod')
-        self.containsstat('GFP100')
-        self.containsstat('c-GFP100perod')
-        self.containsstat('GFP90')
-        self.containsstat('c-GFP90perod')
-        self.containsstat('GFP80')
-        self.containsstat('c-GFP80perod')
-        self.containsstat('GFP70')
-        self.containsstat('c-GFP70perod')
-        self.containsstat('GFP60')
-        self.containsstat('c-GFP60perod')
-        self.containsstat('GFP50')
-        self.containsstat('c-GFP50perod')
-        self.containsstat('FLperod')
+        self.containsstat('gr', printstats=False)
+        self.containsstat('GFP', printstats=False)
+        self.containsstat('c-GFPperod', printstats=False)
+        self.containsstat('GFP100', printstats=False)
+        self.containsstat('c-GFP100perod', printstats=False)
+        self.containsstat('GFP90', printstats=False)
+        self.containsstat('c-GFP90perod', printstats=False)
+        self.containsstat('GFP80', printstats=False)
+        self.containsstat('c-GFP80perod', printstats=False)
+        self.containsstat('GFP70', printstats=False)
+        self.containsstat('c-GFP70perod', printstats=False)
+        self.containsstat('GFP60', printstats=False)
+        self.containsstat('c-GFP60perod', printstats=False)
+        self.containsstat('GFP50', printstats=False)
+        self.containsstat('c-GFP50perod', printstats=False)
+        #self.containsstat('FLperod', printstats=False)
         self.consensusFLs=[]
         self.consensusFL=[]
         self.consensusFLperod=[]
@@ -740,7 +740,9 @@ class accesspr:
     def listcontents(self, verbose=True):
         '''
         Lists all the different conditions and strains that are contained 
-        in the different experiments.
+        in the different experiments. Assembles xpr.allStrains, xpr.allMedia and xpr.allExperiments
+        Arguments:
+        verbose: prints the contents of every experiment to screen.
         '''
         D = self.data
         self.allMedia=set()
@@ -759,8 +761,8 @@ class accesspr:
                         print( strain +',')
                     self.allStrains.add(strain)
                 
-    def containsstat(self, stat):
-        '''checks whether the experiments contain the given statistic.
+    def containsstat(self, stat, printstats=False):
+        '''checks whether the experiments contain the given statistic stat.
         '''
         for key in self.data.keys():
             #print('condition list of ', key, ':') 
@@ -774,14 +776,20 @@ class accesspr:
                     percentage=percentage+ 1/np.size(cl, 0)
                     #print(percentage)
                     self.statContents.loc[key, stat]=percentage
+                    if printstats==True:
+                        print(self.statContents)
             
     def containssetup(self, media, strain, verbose=False, strict=True, musthave='gr'):
         '''
         Creates a list of experiments that contain the specified conditions.
         This list is used when plotting or statistics methods are called.
-        the strict functionality (default) retrieves just the experiments that contain both gr and FLperod
-        setting strict to False retrieves all experiments that contain that condition regardless 
-        of whether they contain any processing. This is relevant for some routines that require both processings.
+        Arguments:
+        media: the media to be searched
+        strain: the strain to be searched
+        verbose: prints a little message whether a given experiment contains the setup (both media and strain)
+        musthave: a statistic that must be present in the experiments in order to be returned by the function
+        strict: retrieves just the experiments that contain media, strain and musthave. if False, experiments are filtered on the basis of media and strain only.
+         This is relevant for some routines that require growth rate.
         '''
         D = self.data
         self.media = media
@@ -814,6 +822,8 @@ class accesspr:
         return [sd[c] for c in np.where([strng in j for j in  self.allMedia])[0]]
     
     def getAllContents(self):
+        ''' retrieves a set of unique conditions in all experiments
+        '''
         cl= pd.DataFrame()
         for key in self.data.keys():
             #print(cl)
@@ -821,7 +831,7 @@ class accesspr:
         cl=cl.drop_duplicates()
         self.allContents= pd.DataFrame(np.column_stack([cl.values[:,0], cl.values[:,1]]), columns=['media', 'strain'])
 
-    def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True):
+    def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True, mediausemean=False):
         ''' function designed to run correctauto on all experiments, or combinations of media and strains. 
         '''
         if experiments=='all':
@@ -839,7 +849,7 @@ class accesspr:
                 plt.close('all')
                 break
             except: #LinAlgErr:
-                for e in range(2,10):
+                for e in range(2,20):
                     try:
                         print('try number '+str(e))
                         self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia )
@@ -923,7 +933,7 @@ class accesspr:
         plt.xlabel('OD of null')
         plt.ylabel('FL of null')
         createFigLegend(dic=exptColors)
-    def getstats(self, experiments='all', media='all', strain='all', dtype=['OD'], rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False):
+    def getstats(self, experiments='all', media='all', strain='all', dtype=['OD'], rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
         statistical analysis have run odstats().
@@ -1024,7 +1034,7 @@ class accesspr:
         else:
             print('Experiments have already been aligned. to realign, try rerun=True')
 
-    def plotReplicateMean(self, media, strain, experiments='all', dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0):
+    def plotReplicateMean(self, media, strain, experiments='all', dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr Peak'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
             try:
@@ -1037,7 +1047,7 @@ class accesspr:
         cv=[]
         for m in media:
             #print('processing '+m)
-            interpolated= self.interpTimes(m, strain, dtype=dtype, experiments=experiments)
+            interpolated= self.interpTimes(m, strain, dtype=dtype, experiments=experiments, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
             interpolated['time']=interpolated['time'][excludeFirst:excludeLast]
             if normalise==True:
@@ -1060,12 +1070,12 @@ class accesspr:
                 totalsd=np.nanstd(reps,1)
                 plt.plot(interpolated['time'], totalmn, color=col)
                 plt.fill_between(interpolated['time'], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
-                plt.xlabel('Time centered at gr Peak')
+                plt.xlabel(centeringVariable)
                 plt.ylabel(dtype)
             else:
                 plt.plot(interpolated['time'], mn, color=col)
                 plt.fill_between(interpolated['time'], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
-                plt.xlabel('Time centered at gr Peak')
+                plt.xlabel(centeringVariable)
                 plt.ylabel(dtype)
                 ###then get their mean
                 ###then add it to the column         
@@ -1316,7 +1326,7 @@ class accesspr:
                  plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
         plt.figlegend(patches, legs, 'upper right')
         return strainColors
-    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='gr', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
+    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='Time centered at gr peak', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
         self.containssetup(media, strain, strict=True, musthave=dtype)
         if experiments!='all':
             experimentList=experiments
@@ -1331,8 +1341,8 @@ class accesspr:
                 continue
             #print('processing experiment'+expt+'...')
             adjustedTimes[expt]=dict()
-            maxLengths.append(np.around(self.data[expt].d[media][strain]['Time centered at gr peak'][-1],2))
-            startPoints.append(np.around(self.data[expt].d[media][strain]['Time centered at gr peak'][0],2))
+            maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
+            startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
             #startpoints=np.array(startPoints)
             #maxLengths=np.array(maxLengths)
         #print('startpoints: ', startPoints)
@@ -1342,7 +1352,7 @@ class accesspr:
         func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
         for expt in experimentList:
             #print('entered storage loop')
-            fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain]['Time centered at gr peak']])
+            fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
             #print(np.shape(self.data[expt].d[media][strain][dtype])[1])
             #print('fitpoints of '+expt+': ', fitPoints)
             try:
@@ -1354,11 +1364,11 @@ class accesspr:
                 except:
                     print('impossible to process '+dtype+'. Please make sure the statistic exists and is time x replicate array.')
             try:
-                adjustedTimes[expt]['time']=np.around(self.data[expt].d[media][strain]['Time centered at gr peak'][fitPoints],2)
+                adjustedTimes[expt]['time']=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
             except:
-                print('problems retrieving ''Time centered at gr peak''. attempting to align specific condition...')
+                print('problems retrieving '+centeringVariable+'. attempting to align specific condition...')
                 xpr.plotalign(media, strain)
-                adjustedTimes[expt]['time']=np.around(self.data[expt].d[media][strain]['Time centered at gr peak'][fitPoints],2)
+                adjustedTimes[expt]['time']=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
             #print('adjustedTimes of '+expt+': ', adjustedTimes[expt]['time']) 
             #print(np.column_stack([adjustedTimes[expt]['time'],adjustedTimes[expt][dtype]]))
         finalDict={};
@@ -1456,6 +1466,8 @@ class accesspr:
         for i in range(0, np.shape(self.containslist)[0]): 
             try:
                 nflod=self.FL[containslist[i]]['mainFLperod']
+                #if the mock assignment below crashes, there is no FLperod
+                checkingFL= self.data[containslist[i]][media][strain][nflod]
             except:
                 InitialFLperOD.append(np.nan)
                 FinalFLperOD.append(np.nan)

@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from os import path
 
-
+# Version 1.0
 
 class GuiOutput():
     font= ('courier', 16, 'normal')

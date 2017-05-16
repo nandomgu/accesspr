@@ -83,6 +83,8 @@ def plotxyerr(x, y, xerr, yerr, xlabel= 'x', ylabel= 'y', title= '', color= 'b',
 
 class fitderiv:
     '''
+    Version 1.0
+
     to fit data and estimate the time derivative of the data using Gaussian processes
 
     A typical work flow is:
@@ -134,7 +136,7 @@ class fitderiv:
     def __init__(self, t, d, cvfn= 'sqexp', noruns= 3, exitearly= False, figs= False, bd= False,
                  esterrs= False, optmethod= 'l_bfgs_b', nosamples= 100, logs= True,
                  gui= False, figtitle= False, ylabel= 'y', stats= True, statnames= False,
-                 showstaterrors= True, warn= False):
+                 showstaterrors= True, warn= False, linalgmax= 3):
         '''
         Runs a Gaussian process to fit data and estimate the time-derivative
 
@@ -158,6 +160,7 @@ class fitderiv:
         statnames: a list for specializing the names of the statistics
         showstaterrors: if True, display estimated errors for statistics
         warn: if False, warnings created by covariance matrices that are not positive semi-definite are stopped
+        linalgmax: number of attempts (default is 3) if a linear algebra (numerical) error is generated
         '''
         self.ylabel= ylabel
         self.logs= logs
@@ -242,7 +245,7 @@ class fitderiv:
             ma= False
         # run Gaussian process
         g= getattr(gp, cvfn + 'GP')(bds, ta, da, merrors= ma)
-        g.findhyperparameters(noruns, exitearly= exitearly, optmethod= optmethod)
+        g.findhyperparameters(noruns, exitearly= exitearly, optmethod= optmethod, linalgmax= linalgmax)
         # display results of fit
         if gui:
             print('log(max likelihood)= %e' % (-g.nlml_opt))
