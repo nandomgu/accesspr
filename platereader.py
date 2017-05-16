@@ -27,7 +27,7 @@ class platereader:
     p.plot('OD')
     p.plot(conditionincludes= ['Gal', 'Glu'], strainexcludes= 'HXT7')
     p.correctauto()
-    p.plot('c-GFPperod')
+    p.plot('c-GFPperod', onefig= True)
     p.savefigs()
     p.getstats('1% Gal', 'GAL2')
     p.getstats('1% Gal', 'GAL2', dtype= 'FLperod')
@@ -73,7 +73,7 @@ class platereader:
     '''
 
     #####
-    def __init__(self, dname, aname= 'default', prtype= 'Tecan', wdir= '', dsheetname= 0, asheetname= 0,
+    def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0, asheetnumber= 0,
                  ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True, standardgain= False):
         '''
         Requires a data file, fname, (.csv, .txt, .xls, or .xlsx). An annotation file, aname, giving the contents of each well is optional. The plate reader is assumed to be a Tecan machine (but alternatives can in principle be specified using the platereader argument). A working directory can be set using wdir, such as wdir= 'data/'.
@@ -82,18 +82,18 @@ class platereader:
         --
         dname: file name of data (if no extension is given, '.xlsx' is assumed)
         aname: file name for annotation (if 'default', assumed to be the root of dname + '_contents.xlsx)
-        prtype: type of plate reader ('Tecan')
-        dsheetname: specifies the sheet of the data Excel file, e.g. dsheetname= 'Sheet2'
-        asheetname: specifies the sheet of the annotation Excel file
+        platereadertype: type of plate reader ('Tecan')
+        dsheetnumber: specifies the sheet of the data Excel file
+        asheetnumber: specifies the sheet of the annotation Excel file
         wdir: name of directory where the data files are stored
         ODfname: file name for dilution data for corrected OD (default is 'ODcorrection.txt')
         warn: if False (default), warnings created by covariance matrices that are not positive semi-definite are stopped
         info: if True (default), display information on the plate after loading
         standardgain: if defined, fluorescence measurements are corrected to this gain
         '''
-        self.version= '4.6'
-        self.dsheetname= dsheetname
-        self.asheetname= asheetname
+        self.version= '4.62'
+        self.dsheetnumber= dsheetnumber
+        self.asheetnumber= asheetnumber
         if '.' not in dname: dname += '.xlsx'
         # specify working directory
         self.wdir= wdir
@@ -104,7 +104,6 @@ class platereader:
         self.gamma= 0.114   # ratio of 585 to 525 for eGFP
         self.nosamples= 100  # for estimating error through sampling
         self.consist= 2   # number of stds of corrected reference strain data that is considered measurement noise
-        rows= 'ABCDEFGH'
         self.overflow= -999.99
 
         # correction has not been performed
@@ -128,17 +127,18 @@ class platereader:
         if aname:
             # import annotation
             try:
-                r= pd.ExcelFile(self.wdir + aname).parse(asheetname)
+                r= pd.ExcelFile(self.wdir + aname).parse(asheetnumber)
             except FileNotFoundError:
                 raise(SystemExit("\nError: Can't find " + self.wdir + aname))
         else:
             # no annotation: use wells
-            r= [[a + str(j) + ' in unspecified' for j in np.arange(1,13)] for a in rows]
-            r= pd.DataFrame(r, index= [a for a in rows], columns= [j for j in np.arange(1,13)])
+            r= [[a + str(j) + ' in unspecified' for j in np.arange(1,13)] for a in 'ABCDEFGH']
+            r= pd.DataFrame(r, index= [a for a in 'ABCDEFGH'], columns= [j for j in np.arange(1,13)])
 
 
         # import data
-        df, dlabels, gains, datatypes, t, idstartindex, dstartindex= self.importdata(prtype, dname, dsheetname)
+        df, dlabels, gains, datatypes, t, idstartindex, dstartindex= self.importdata(platereadertype,
+                                                                                     dname, dsheetnumber)
         # check data type names are defined otherwise use defaults
         defaults= ['OD'] + ['FL'+ str(i) for i in range(len(datatypes)-1)]
         for j, dtn in enumerate(datatypes):
@@ -153,7 +153,7 @@ class platereader:
         allconditions= []
         allstrains= []
         alldata= []
-        for let in rows:
+        for let in 'ABCDEFGH':
             for no in np.arange(1,13):
                 plateloc= let + str(no)
                 try:
@@ -219,16 +219,24 @@ class platereader:
 
 
     #####
-    def importdata(self, prtype, dname, dsheetname):
+    def importdata(self, platereadertype, dname, dsheetnumber):
         '''
         Internal function: Creates and parses dataframe from plate reader Excel file.
+        Returns:
+            df: dataframe (arranged in rows by well label; data in form of time-series of OD then GFP, etc.)
+            dlabels: used to find location of well in data (row number)
+            gains: gains used
+            datatypes: data types present
+            t: time
+            idstartindex: index in row for label of well
+            dstartindex: index in row where data starts
         '''
         try:
             xl= pd.ExcelFile(self.wdir + dname)
         except FileNotFoundError:
             raise(SystemExit("\nError: Can't find " + self.wdir + dname))
-        df= xl.parse(dsheetname)
-        if prtype == 'Tecan':
+        df= xl.parse(dsheetnumber)
+        if platereadertype == 'Tecan':
             # for Tecan plate reader post 2015
             df= df.replace('OVER', self.overflow)
             dlabels= df[df.columns[0]].values
@@ -254,7 +262,31 @@ class platereader:
             dstartindex= 1
             # data types
             datatypes= [str(df.ix[it-2][0]) for it in itime]
-        elif prtype == 'Hidex':
+        elif platereadertype == 'Sunrise':
+            # Sunrise plate reader
+            datatypes= ['OD']
+            gains= ['']
+            # rearrange data
+            tdic= {}
+            for well in [a + str(j) for j in np.arange(1,13) for a in 'ABCDEFGH']:
+                tdic[well]= []
+            for index, row in df.iterrows():
+                for ir, rd in enumerate(row[1:]):
+                    if row[0] in 'ABCDEFGH':
+                        tdic[row[0] + str(ir+1)].append(rd)
+            df= pd.DataFrame(tdic).transpose()
+            dlabels= np.array(df.index.tolist())
+            # time
+            if not hasattr(self, 't'):
+                # not specified by Magellan: assign default
+                print('Warning: could not find any measurements of time')
+                t= np.arange(0, df.shape[1])
+            else:
+                t= self.t
+            # indices to extract data
+            idstartindex= 0
+            dstartindex= 0
+        elif platereadertype == 'Hidex':
             # Hidex plate reader
             dlabels= df[df.columns[0]].values
             # time in hours
@@ -646,9 +678,8 @@ class platereader:
                 if 'media' in S.keys():
                     # one set of media measurements for all wells
                     print('Correcting', dn, 'for media')
-                    mc= self.findmediacorrection(dn, 'media', figs, noruns, exitearly, bd, results,
-                                                 'media correction for ' + dn)
-                    for c in cons: self.performmediacorrection(dn, c, mc)
+                    for c in cons:
+                        self.performmediacorrection(dn, 'media', figs, noruns, exitearly, bd, results, mean)
                 else:
                     # media measurements for each condition
                     for c in cons:
@@ -656,7 +687,7 @@ class platereader:
                         if 'null' in S[c]:
                             self.performmediacorrection(dn, c, figs, noruns, exitearly, bd, results, mean)
                         else:
-                            print(' No well annotated "null" was found and media correction abandoned')
+                            print('No well annotated "null" was found and media correction abandoned')
                 self.updatemeans()
                 self.mediacorrected[dn]= True
             else:
@@ -1325,7 +1356,8 @@ class platereader:
                         ylabels= [dtype, 'derivative of ' + dtype]
                         logs= False
                     f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs,
-                                bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns ,exitearly= False, linalgmax= 5)
+                                bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns,
+                                exitearly= False, linalgmax= 5)
                     plt.figure()
                     plt.subplot(2,1,1)
                     f.plotfit('f', ylabel= ylabels[0], figtitle= figtitle + ' : growth rate')
@@ -1547,12 +1579,27 @@ class platereader:
 
 class slpr(platereader):
 
-    def __init__(self, dname, aname= 'default', prtype= 'Tecan', wdir= '', dsheetname= 0, asheetname= 0,
-             ODfname= 'ODcorrection.txt', warn= False, info= True, standardgain= False):
+    def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0, asheetnumber= 0,
+             ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True, standardgain= False):
 
-        super().__init__(dname, aname, prtype, wdir, dsheetname, asheetname, ODfname,
+        if platereadertype == 'Sunrise':
+            # extract time from sheet 0 of Excel file
+            timedf= pd.ExcelFile(wdir + dname).parse(0)
+            t= []
+            for index, row in timedf.iterrows():
+                if '/' in row[0]:
+                    t.append(int(row[0].split('/')[-2].split('s')[0]))
+            self.t= np.array(t)/3600
+            # data is in sheet 1
+            dsheetnumber= 1
+
+        # call platereader
+        super().__init__(dname, aname, platereadertype, wdir, dsheetnumber, asheetnumber, ODfname,
                              warn, info, standardgain)
         self.__doc__= super().__doc__
+
+
+
 
 
 

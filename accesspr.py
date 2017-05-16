@@ -245,7 +245,7 @@ def extractTS(df, media, strain, tstype='FLperODTS'):
 
 class accesspr:	
     '''
-    accesspr version 4.6(the number matches with that of the compatible platereader software version)
+    accesspr version 4.62(the number matches with that of the compatible platereader software version)
     
     accesspr is a class that allows to integrate and organize the information
     from many plate reader experiments to produce publication-grade plots and tables. 
