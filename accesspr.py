@@ -523,7 +523,7 @@ class accesspr:
 
     '''
 
-    def __init__(self, source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod'):
+    def __init__(self, source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False):
         '''
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
         '''
@@ -539,7 +539,7 @@ class accesspr:
         if path.exists(self.source) and path.isdir(self.source):
             dirs = os.listdir(self.source)
             for entry in dirs:
-                if entry.endswith('.pkl') and (ignoreFiles == False or ((entry in ignoreFiles)==False)) :
+                if entry.endswith('.pkl') and (ignoreFiles == False or ((entry in ignoreFiles)==False)) and (onlyFiles==False or entry in onlyFiles) :
                     print('trying to open ', entry)
                     pkl = open(self.source + '/' + entry, 'rb')
                     self.data[entry] = pickle.load(pkl,encoding= encoding)
@@ -548,7 +548,11 @@ class accesspr:
         elif path.exists(self.source) and self.source.endswith('.pkl'):
             filename = self.source.split('/')[-1]
             pkl = open(self.source, 'rb')
-            self.data[filename] = pickle.load(pkl, encoding= encoding)
+            if onlyFiles!=False:
+                if filename in onlyFiles:
+                    self.data[filename] = pickle.load(pkl, encoding= encoding)
+            else:
+                self.data[filename] = pickle.load(pkl, encoding= encoding)
             pkl.close()
             self.experimentDuration[filename]=self.data[filename].t[-1]
         self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
@@ -1034,7 +1038,7 @@ class accesspr:
         else:
             print('Experiments have already been aligned. to realign, try rerun=True')
 
-    def plotReplicateMean(self, media, strain, experiments='all', dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr Peak'):
+    def plotReplicateMean(self, media, strain, experiments='all', dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
             try:
@@ -1326,7 +1330,7 @@ class accesspr:
                  plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
         plt.figlegend(patches, legs, 'upper right')
         return strainColors
-    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='Time centered at gr peak', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
+    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='time', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
         self.containssetup(media, strain, strict=True, musthave=dtype)
         if experiments!='all':
             experimentList=experiments
@@ -1364,11 +1368,11 @@ class accesspr:
                 except:
                     print('impossible to process '+dtype+'. Please make sure the statistic exists and is time x replicate array.')
             try:
-                adjustedTimes[expt]['time']=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
+                adjustedTimes[expt][centeringVariable]=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
             except:
                 print('problems retrieving '+centeringVariable+'. attempting to align specific condition...')
                 xpr.plotalign(media, strain)
-                adjustedTimes[expt]['time']=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
+                adjustedTimes[expt][centeringVariable]=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
             #print('adjustedTimes of '+expt+': ', adjustedTimes[expt]['time']) 
             #print(np.column_stack([adjustedTimes[expt]['time'],adjustedTimes[expt][dtype]]))
         finalDict={};
@@ -1386,10 +1390,10 @@ class accesspr:
             #try:
             for j in range(1, np.size(experimentList)): #arbitrarily taking the first experiment in the list as reference
                 try:
-                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain]['Time centered at gr peak'],2),self.data[experimentList[j]].d[media][strain][dtype])
+                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain]['time'],2),self.data[experimentList[j]].d[media][strain][dtype])
                 except:
                     print(dtype+' cannot be interpolated as single dimension. attempting column-averaging...')
-                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain]['Time centered at gr peak'],2),self.data[experimentList[j]].d[media][strain][dtype].mean(1))
+                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain]['time'],2),self.data[experimentList[j]].d[media][strain][dtype].mean(1))
                 temptime= adjustedTimes[experimentList[0]]['time'] ##[0:-1]
                 #temptime[0]=temptime[0]+exceptionShift
                 #temptime[-1]=temptime[-1]- exceptionShift

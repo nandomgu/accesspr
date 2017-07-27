@@ -640,11 +640,52 @@ mydir20170427= homedir+dropboxPath+'/20170427_Hxt4_Snf3_Mig1'
 p20170427=pr.platereader(mydir20170427+'/20170427_hxt4_snf3_mig1.xlsx', mydir20170427+'/20170427contents.xls')
 p20170427.ignorewells('H12', 'E10')
 p20170428=pr.platereader(mydir20170427+'/20170428_hxt4_snf3_mig1_2.xlsx', mydir20170427+'/20170427contents.xls')
-pickle.dump(p20170427, open(homedir+dropboxPath+'/allPickles2017/p20170427.pkl', 'wb'))
-pickle.dump(p20170428, open(homedir+dropboxPath+'/allPickles2017/p20170428.pkl', 'wb'))
+pickle.dump(p20170427, open(homedir+dropboxPath+'/allPicklesMig1/p20170427.pkl', 'wb'))
+pickle.dump(p20170428, open(homedir+dropboxPath+'/allPicklesMig1/p20170428.pkl', 'wb'))
+
+
+###20170427 and 28. glucose dose response of Hxt4, in ∆snf3 and ∆mig1 backgrounds, 7 glucose concentrations
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170504= homedir+dropboxPath+'/20170504_WT_Hxt4_Mig1_505snf3'      
+p20170504=pr.platereader(mydir20170504+'/20170504_229_409hxt4_500mig1_505snf3.xlsx', mydir20170504+'/20170504contents.xls')
+p20170504.ignorewells(['F10', 'F9', 'F3', 'E10', 'E9', 'E3', 'D10', 'D9'])
+p20170505=pr.platereader(mydir20170504+'/20170505_229_409hxt4_500mig1_505snf3_2.xlsx', mydir20170504+'/20170504contents.xls')
+pickle.dump(p20170504, open(homedir+dropboxPath+'/allPicklesMig1/p20170504.pkl', 'wb'))
+pickle.dump(p20170505, open(homedir+dropboxPath+'/allPicklesMig1/p20170505.pkl', 'wb'))
+
+
+###20170510 and 28. glucose dose response of Hxt4, in ∆snf3 and ∆mig1 backgrounds, 7 glucose concentrations
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170510= homedir+dropboxPath+'/201705010_OD_deletions'      
+p201705101=pr.platereader(mydir20170510+'/20170510_Hxt_deletion_OD_PR1.xlsx', mydir20170510+'/20170510contents.xls')
+p201705101.ignorewells(['F10', 'C12'])
+p201705102=pr.platereader(mydir20170510+'/20170510_Hxt_deletion_OD_PR2.xlsx', mydir20170510+'/20170510contents.xls')
+pickle.dump(p201705101, open(homedir+dropboxPath+'/allPickles2017/p201705101.pkl', 'wb'))
+pickle.dump(p201705102, open(homedir+dropboxPath+'/allPickles2017/p201705102.pkl', 'wb'))
+
+
+###20170512 and 28. glucose dose response of Hxt4, in ∆snf3 and ∆mig1 backgrounds, 7 glucose concentrations
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170512= homedir+dropboxPath+'/20170512_Hxt4_mig2_snf3'      
+p20170512=pr.platereader(mydir20170512+'/20170512_hxt4_mig2_snf3.xlsx', mydir20170512+'/20170512contents.xls')
+
+
+mydir20170513= homedir+dropboxPath+'/20170513_Hxt4_mig2_snf3_2'      
+p20170513=pr.platereader(mydir20170513+'/20170513_hxt4_mig2_snf3_2.xlsx', mydir20170513+'/20170513contents.xls')
+p201705101.ignorewells(['G9', 'F10', 'F3', 'E10','E4', 'D10', 'D3' , 'C10'])
+
+
+p201705121.ignorewells(['F10', 'C12'])
+p201705122=pr.platereader(mydir20170510+'/20170510_Hxt_deletion_OD_PR2.xlsx', mydir20170510+'/20170510contents.xls')
+pickle.dump(p201705121, open(homedir+dropboxPath+'/allPickles2017/p201705101.pkl', 'wb'))
+pickle.dump(p201705122, open(homedir+dropboxPath+'/allPickles2017/p201705102.pkl', 'wb'))
 
 
 
+###
 
 
 ####Jill experiments

@@ -125,7 +125,7 @@ def transformStat(p, stat, scale, shift, genericLabel=True, excludeNull=False):
             else:
                 p.d[media][strain]['transformed'+stat]=p.d[media][strain][stat]*scale+shift
     p.mediacorrected.update({'transformed'+stat: False})
-    p.datatypes.append('transformed'+stat)       
+    #p.datatypes.append('transformed'+stat)       
     p.datatypes=list(np.unique(p.datatypes))
 
 def replaceStat(p, stat,replaceWith=0, genericLabel=True, excludeNull=True):
@@ -147,14 +147,14 @@ def replaceStat(p, stat,replaceWith=0, genericLabel=True, excludeNull=True):
     #p.datatypes.append(stat+'original')       
     p.datatypes=list(np.unique(p.datatypes))
     
-def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, jointplot=False): ##performs a linear transformation tailored to every individual channel, 
+def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, jointplot=False, excludeNull=False): ##performs a linear transformation tailored to every individual channel, 
     '''Generates a linear transformation of expression values'''
     allslopes=[]
     allintercepts=[]
     allrvalues=[]
     allmedia=[]
     allstrains=[]
-    cl=conditionList(p, excludeNull=False).values #condition list array
+    cl=conditionList(p, excludeNull=excludeNull).values #condition list array
     for j in range(0, np.size(cl,0)):
         media=cl[j,0]
         strain=cl[j,1]
@@ -981,14 +981,26 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
             plt.figlegend(patches, legendNames, 'upper right')
     return mediaColors
     
-def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False, xstat='time'):
+def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False, xstat='time', addtofigs=False):
+    possibleNewFigs= set(range(1,30)) ## a max number of 30 figure numbers to grab
+    [possibleNewFigs.remove(j) for j in plt.get_fignums()] ### remove fignums already taken
     cl= conditionList(p, excludeNull=True)
     if strainColors==0:
         strainColors= randomColors(np.size(np.unique(cl['strain'])))
         strainColors= dict(zip(np.unique(cl['strain']), strainColors))
         #print( strainColors)
-    for  str in list(p.d.keys()):
-        plt.figure();
+    for  j in range(0,np.size(list(p.d.keys()))):
+        print(j)
+        str=list(p.d.keys())[j]
+        if addtofigs!=False:
+            #add to figures is supposed to be an array of figure numbers over which we will plot the new plots.
+            #if there are any problems trying to access elements of addtofigs, then we just generate a new figure.
+            try:
+                plt.figure(addtofigs[j])
+            except:
+                plt.figure(possibleNewFigs[j])
+        else:
+            plt.figure()
         sdf= cl[cl['media']==str]
         sdf=sdf.reset_index()
         #print( sdf)
@@ -1190,7 +1202,7 @@ def statTSFrames(p, media, strain, stat , finaltp, col='black', tpPerFrame=2, la
         plt.ylim([0, max(p.d[media][strain][stat][0:j])])
 
 def experimentOverview(p, dtype= 'OD', colormap='cool', colorMapRange=False, timeRange=False, addFL=False):
-    defaultRange={'OD': [0,1.5], 'GFP':[0,8000], 'AutoFL': [0,1000], 'mCherry': [0, 5000]}
+    defaultRange={'OD': [0,1.5], 'GFP':[0,8000], 'AutoFL': [0,1000], 'mCherry': [0, 5000],'GFP80':[0,8000], 'GFP60':[0,8000], 'GFP100':[0,8000]}
     if addFL!= False:
         defaultRange.update(addFL)
     if colorMapRange==False:
