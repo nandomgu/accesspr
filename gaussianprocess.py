@@ -1,4 +1,6 @@
 """
+    Version 1.0
+
     Encodes fitting and interpolating using Gaussian processes following Rasmussen and Williams (2006).
 
     The Gaussian process algorithms come from chapter 3 and the Jacobian of the negative log likelihood from chapter 5 of Rasmussen and Williams.
@@ -21,6 +23,7 @@
 
     will plot three samples of the prior latent functions with hyperparameters 1.0, 0.1, 3.1, and 1.3. There is no need to specify the hyperparameter for measurement error: it is not used to generate prior functions.
 
+    N.B. small (close to zero) values of the estimated measurement error can lead to instabilities in finding the hyperparameters.
 """
 
 import numpy as np
@@ -761,7 +764,7 @@ class maternGP(gaussianprocess):
 
     def info(self):
         print('hparam[0] determines the amplitude of variation')
-        print('hparam[1] determines the flexibility')
+        print('hparam[1] determines the stiffness')
         print('hparam[2] determines the variance of the measurement error')
 
     def covfn(self, x, xp, lth):

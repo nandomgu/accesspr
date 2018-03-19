@@ -82,6 +82,21 @@ def colorContour(p,media, strain, xstat, ystat, colorBy, vmin=0, vmax=0, stretch
             else:
                 plt.plot(x[j:j+stretch],y[j:j+stretch] ,color=cmap(norm(c[j+stretch])))
 
+def alignTime(p, media, strain, FL='c-GFPperod', centerAtPeakFL=0):
+	"centers time in the plate reader experiment p at the time of maximum growth rate (default) or time of peak fluorescence. this function is to be used by accesspr"
+	# time t where growth rate is max for given curve
+	if centerAtPeakFL==0:
+	    centeredTime=p.t[np.where(p.d[media][strain]['gr']==max(p.d[media][strain]['gr']))]
+	else:
+	    if strain== 'null':
+	        return 'NaN'
+	    else:
+	        centeredTime=p.t[np.where(p.d[media][strain][normalflperod]==max(p.d[media][strain][FL]))]
+	#out= {'alignedTime': alignedTimeVector , 'rawFL':rawFLVector ,'normalizedFL':normalizedFLVector , 'peakFL':peak,  'peakTime':peakTime, 'gr':p.d[media][strain]['gr']}
+	alignedTimeVector=p.t-centeredTime
+	out=alignedTimeVector
+	return out
+
 def symmetricMap(poslimit, nbins=10, extendBy=False):
     ''' 
     This function creates a symmetric bin set where the edges are -poslimit and poslimit, equally spaced in 10 bins.
@@ -145,7 +160,7 @@ def replaceStat(p, stat,replaceWith=0, genericLabel=True, excludeNull=True):
             p.d[media][strain][stat]=p.d[media][strain][replaceWith]        
     p.mediacorrected.update({stat+'original': False})
     #p.datatypes.append(stat+'original')       
-    p.datatypes=list(np.unique(p.datatypes))
+    #p.datatypes=list(np.unique(p.datatypes))
     
 def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, jointplot=False, excludeNull=False): ##performs a linear transformation tailored to every individual channel, 
     '''Generates a linear transformation of expression values'''
@@ -231,16 +246,17 @@ def normalizeOverTime(p, media, strain, subtractBg=0):
     normalizedFLVector=(noBgFLVector-np.mean(noBgFLVector))/np.std(noBgFLVector)
     return normalizedFLVector
 	
-def alignStats(p, media, strain, subtractBg=0):
-    rawFLVector=p.d[media][strain][normalflperodName]
-    noBgFLVector=p.d[media][strain][normalflperodName]-min(p.d[media][strain][normalflperodName])      
-    normalizedFLVector=(noBgFLVector-np.mean(noBgFLVector))/np.std(noBgFLVector)
+def alignStats(p, media, strain, dtype, subtractBg=0):
+    rawFLVector=p.d[media][strain][dtype]
+    noBgFLVector=p.d[media][strain][dtype]-np.nanmin(p.d[media][strain][dtype])
+    normalizedFLVector=(noBgFLVector-np.nanmean(noBgFLVector))/np.nanstd(noBgFLVector)
     normalizedFLPeak=max(normalizedFLVector)
     alignedTimeVector=alignTime(p,media,strain)
-    alignedPeakTime=alignedTimeVector[np.where(normalizedFLVector==max(normalizedFLVector))]
-    absolutePeakTime=p.t[np.where(rawFLVector==max(rawFLVector))]
-    out= {'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime}
+    alignedPeakTime=alignedTimeVector[np.where(normalizedFLVector==np.nanmax(normalizedFLVector))]
+    absolutePeakTime=p.t[np.where(rawFLVector==np.nanmax(rawFLVector))]
+    out= {'rawFL': rawFLVector, 'normalizedFL': normalizedFLVector, 'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime}
     return out
+
     
 def plotalign(p, media, strain, col='black', normalize=1, centerAtPeakFL=0):
 	"aligns fitted curves for given strains respective to normalized peak or maximum growth rate. this is a standalone function to plot."
@@ -931,7 +947,7 @@ def plotRawODPerStrainRobust(p, mediaColors=0, containsFL=True, xlim= False, yli
     
     
     
-def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=False, addtofigs=False, addLegend=False, xstat='time'):	
+def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=False, addtofigs=False, addLegend=False, xstat='time', ignoreConditions=[]):	
     possibleNewFigs= set(range(1,30))
     [possibleNewFigs.remove(j) for j in plt.get_fignums()]
     cl= conditionList(p, excludeNull=True)
@@ -941,6 +957,8 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
         #print( mediaColors)
     for  j in range(0, np.size(p.allstrains)):
         str=p.allstrains[j]
+        if str in ignoreConditions:
+            continue
         if addtofigs!=False:
             #add to figures is supposed to be an array of figure numbers over which we will plot the new plots.
             #if there are any problems trying to access elements of addtofigs, then we just generate a new figure.
@@ -956,6 +974,10 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
         legendNames=[];
         patches=[];
         for x in range(0, np.size(sdf,0)):
+            if x in ignoreConditions:
+                continue
+            if str+' in '+sdf['media'][x] in ignoreConditions:
+                continue
             legendNames.append(sdf['media'][x])
             patches.append(pch.Patch(color=mediaColors[sdf['media'][x]], label=sdf['media'][x]))
             arr=p.d[sdf['media'][x]][sdf['strain'][x]][dtype]
@@ -981,7 +1003,7 @@ def plotRawStatPerStrainRobust(p, mediaColors=0, dtype='GFP', xlim=False, ylim=F
             plt.figlegend(patches, legendNames, 'upper right')
     return mediaColors
     
-def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False, xstat='time', addtofigs=False):
+def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=False, normalize=False, ignoreStrains=[], addLegend=False, xstat='time', addtofigs=False, ignoreConditions=[]):
     possibleNewFigs= set(range(1,30)) ## a max number of 30 figure numbers to grab
     [possibleNewFigs.remove(j) for j in plt.get_fignums()] ### remove fignums already taken
     cl= conditionList(p, excludeNull=True)
@@ -992,6 +1014,8 @@ def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=F
     for  j in range(0,np.size(list(p.d.keys()))):
         print(j)
         str=list(p.d.keys())[j]
+        if str in ignoreConditions:
+            continue
         if addtofigs!=False:
             #add to figures is supposed to be an array of figure numbers over which we will plot the new plots.
             #if there are any problems trying to access elements of addtofigs, then we just generate a new figure.
@@ -1007,6 +1031,10 @@ def plotRawStatPerMediaRobust(p, strainColors=0, dtype='GFP', xlim=False, ylim=F
         legendNames=[];
         patches=[];
         for x in range(0, np.size(sdf,0)):
+            if x in ignoreConditions:
+                continue
+            if str+' in '+sdf['media'][x] in ignoreConditions:
+                continue
             if sdf['strain'][x] in ignoreStrains:
                 continue
             arr=p.d[sdf['media'][x]][sdf['strain'][x]][dtype]

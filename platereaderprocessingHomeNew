@@ -349,9 +349,6 @@ p20161022.getstats()
 pickle.dump(p20161022, open(homedir+dropboxPath+'/allPicklesNew/p20161022.pkl', 'wb'))
 
 
-
-
-
 ###### experiment to check whether different plates,single colonies or day of experiment conditions contribute to variation in OD and Fluorescence
 
 mydir20161023=  homedir+dropboxPath+'/20161023_409_Hxt4_multiple_petri_and_colony_assay'
@@ -359,8 +356,6 @@ p20161023=pr.platereader(mydir20161023+'/20161023_409_hxt4_multiple_petri_and_co
 #p20161023.correctauto()
 #p20161023.getstats()
 pickle.dump(p20161023, open(homedir+dropboxPath+'/allPicklesNew/p20161023.pkl', 'wb'))
-
-
 
 
 
@@ -405,10 +400,10 @@ p20170120=pr.platereader(mydir20170120+'/Balazsi_Strains.2Gal.10-500ngDeocycylin
 mydir20170207= homedir+dropboxPath+'/20170207_jamie_luis'     
 p20170207=pr.platereader(mydir20170207+'/20170207_jamie_luis.xlsx', mydir20170207+'/20170208contents.xls')
 p20170207.ignorewells(['D6'])  
-p20170207.correctauto(refstrain='JA.WT')     
+p20170207.correctauto(refstrain='JA.WT', f=['GFP', 'AutoFL'], ignoreneg=True)     
 p20170207.getstats()     
 pickle.dump(p20170207, open(homedir+dropboxPath+'/allPicklesNew/p20170207.pkl', 'wb'))
-
+p20170207=pickle.load(open(homedir+dropboxPath+'/allPicklesNew/p20170207.pkl', 'rb')
 
 
 ###201702221 all Hxts grown in pyruvate for 5 days. 
@@ -602,7 +597,6 @@ pickle.dump(p20170330, open(homedir+dropboxPath+'/allPicklesHXTPyr/p20170330.pkl
 
 ###201704012 all Hxts grown in pyruvate, pilot SOP, 0.2% and 2% glucose, second replicate
 
-
 homedir= '/Users/s1259407'
 dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
 mydir201704012= homedir+dropboxPath+'/201704012_Hxts_fromPyr'     
@@ -613,14 +607,14 @@ p201704012.getstats()
 pickle.dump(p201704012, open(homedir+dropboxPath+'/allPicklesHXTPyruvate/p201704012.pkl', 'wb'))
 
 
-
-
 ###20170331 first batch of Emily's promoters growth in glucose 2% and glucose+ sucrose 2%
 homedir= '/Users/s1259407'
 dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
 mydir20170331= homedir+dropboxPath+'/20170331_LuisEmilyPromotersPR1SUC'     
 p20170331=pr.platereader(mydir20170331+'/20170331_LuisEmilyPromotersPR1SUC.xlsx', mydir20170331+'/20170331contents.xls')
-#p20170331.ignorewells(['A7', 'C1', 'A3'])
+
+p20170331.ignorewells(['D4','E4','F4', 'C7','C11' ])
+
 pickle.dump(p20170331, open(homedir+dropboxPath+'/allPickles2017/p20170331.pkl', 'wb'))
 
 
@@ -677,15 +671,85 @@ mydir20170513= homedir+dropboxPath+'/20170513_Hxt4_mig2_snf3_2'
 p20170513=pr.platereader(mydir20170513+'/20170513_hxt4_mig2_snf3_2.xlsx', mydir20170513+'/20170513contents.xls')
 p201705101.ignorewells(['G9', 'F10', 'F3', 'E10','E4', 'D10', 'D3' , 'C10'])
 
-
+###Hxt deletion experiments
 p201705121.ignorewells(['F10', 'C12'])
 p201705122=pr.platereader(mydir20170510+'/20170510_Hxt_deletion_OD_PR2.xlsx', mydir20170510+'/20170510contents.xls')
 pickle.dump(p201705121, open(homedir+dropboxPath+'/allPickles2017/p201705101.pkl', 'wb'))
 pickle.dump(p201705122, open(homedir+dropboxPath+'/allPickles2017/p201705102.pkl', 'wb'))
 
+### first round gal80 promoters
+
+mydir20170518= homedir+dropboxPath+'/20170518_LuisEmilyPromotersGal80_PR2'      
+p20170518=pr.platereader(mydir20170518+'/20170518_LuisEmilyPromotersGal80_PR2.xlsx', mydir20170518+'/20170518contents.xls')
+p20170518.ignorewells(['F6', 'E7', 'G2', 'D11', 'B9', 'C4', 'D4', 'C7', 'D7', 'C3', 'C3', 'C2', 'D2'])
 
 
-###
+p20170521=pr.platereader(mydir20170518+'/20170521_LuisEmilyPromotersGal80_PR2.xlsx', mydir20170518+'/20170518contents.xls')
+p20170521.ignorewells(['E9', 'F9', 'E8', 'F8', 'E10', 'F10', 'E3', 'D9', 'C9', 'D8', 'C8', 'D10', 'C10', 'D3'])    
+
+
+pickle.dump(p20170518, open(homedir+dropboxPath+'/allPicklesMoClo/p20170518.pkl', 'wb'))
+
+pickle.dump(p20170521, open(homedir+dropboxPath+'/allPicklesMoClo/p20170521.pkl', 'wb'))
+
+####
+
+
+
+mydir20171018= homedir+dropboxPath+'/20171018_glucsucRatios'      
+p20171018=pr.platereader(mydir20171018+'/20171018_glucsucRatios.xlsx', mydir20171018+'/20171018contents.xls')
+
+
+
+###Second batch of gal80 promoters, replicate 1
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170615= homedir+dropboxPath+'/20170615_LuisEmilyPromotersGal80group2'      
+p20170615=pr.platereader(mydir20170615+'/20170615_LuisEmilyPromotersGal80group2_PR2.xlsx', mydir20170615+'/20170615contents.xls')
+p20170615.ignorewells(['E3', 'F3','E9', 'E10', 'A10', 'D9', 'D10', 'F10', 'E5', 'E7' ])
+
+mydir20170616= homedir+dropboxPath+'/20170616_LuisEmilyPromotersGal80group2'      
+p20170616=pr.platereader(mydir20170615+'/20170616_LuisEmilyPromotersGal80group2_PR2.xlsx', mydir20170615+'/20170616contents.xls')
+
+###WT and gal80 backgrounds in glucose 2% and a mix of 0.2% glucose, 1.8% sucrose
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20170622= homedir+dropboxPath+'/20170622_LuisEmilyPromotersGal80_GlucSuc19_PR2'      
+p20170622=pr.platereader(mydir20170622+'/20170622_LuisEmilyPromotersGal80_Suc19_PR2.xlsx', mydir20170622+'/20170622contents.xls')
+p20170622.ignorewells(['C5', 'D1'])
+      
+p20170623=pr.platereader(mydir20170622+'/20170623_LuisEmilyPromotersGal80_Suc19_PR2.xlsx', mydir20170622+'/20170622contents.xls')
+p20170623.ignorewells(['C5', 'D1'])
+
+
+###Nahuel's experiment
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydirNahuel= homedir+dropboxPath+'/20170626_Nahuel'      
+pNahuel=pr.platereader(mydirNahuel+'/Nahuel_08_06_2017_Yeast_GrowthRate.xlsx', mydirNahuel+'/PlateContents_YeastGR.xlsx')
+
+
+
+###20171107 pHXT4 promoter variants  group 4 
+
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20171107= homedir+dropboxPath+'/20171107_LuisEmilyPromoters_PR2_group4'      
+p20171107=pr.platereader(mydir20171107+'/20171107_LuisEmilyPromoters_PR2_group4.xlsx', mydir20171107+'/20171107contents.xls')
+pickle.dump(p20171107, open(pickleFileFolder+'/p20171107.pkl', 'wb'))
+
+### pretty similar experiment to the above except with an other batch of LOFLO and also testing pHXT4 in LFAM to compare
+homedir= '/Users/s1259407'
+dropboxPath='/Dropbox/PhD/phd_peter_swain/data/plate_reader_data'
+mydir20171110= homedir+dropboxPath+'/20171110_LuisEmilyPromoters_PR2_group4'      
+p20171110=pr.platereader(mydir20171107+'/20171107_LuisEmilyPromoters_PR2_group4.xlsx', mydir20171107+'/20171107contents.xls')
+pickle.dump(p20171107, open(pickleFileFolder+'/p20171107.pkl', 'wb'))
+
+
+
+
 
 
 ####Jill experiments
@@ -1247,7 +1311,7 @@ run  prPlottingFunctions.py
 
 mydir20160805= homedir+'/Dropbox/PhD/phd_peter_swain/data/plate_reader_data/20160805_229_409_GalRafPyrNone/'
 
-p20160805=pr.platereader(mydir20160805+'20160805_229_409_GalRafPyrNone.xlsx', mydir20160805+'20160805contents.xls', asheetname='20160805contents', dsheetname='data')
+p20160805=pr.platereader(mydir20160805+'20160805_229_409_GalRafPyrNone.xlsx', mydir20160805+'20160805contents.xls')
 ####now choose wells to ignore. 
 
 #p20160805.ignorewells(['F4', 'E4', 'C10', 'D10', 'E10', 'F10', 'E2', 'F2', 'C8', 'D8' ,'E8', 'F8', 'D11', 'E11', 'F11', 'D3', 'F3', 'E3', 'C9', 'D9', 'E9', 'F9']) ###may wells are not great due to bumps but we cannot afford to remove them.

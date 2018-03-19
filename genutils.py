@@ -446,3 +446,118 @@ def getpkl(path):
                 b= pickle.load(file)
         except EOFError:
             return b
+
+####
+def multireplace(string, replacements):
+    '''
+    Given a string and a replacement map, it returns the replaced string.
+
+    Arguments
+    ---
+    string : string to execute replacements on
+    replacements: dictionary of replacements {value to find: value to replace}
+    '''
+    import re
+    # Place longer ones first to keep shorter substrings from matching
+    # where the longer ones should take place
+    # For instance given the replacements {'ab': 'AB', 'abc': 'ABC'} against
+    # the string 'hey abc', it should produce 'hey ABC' and not 'hey ABc'
+    substrs = sorted(replacements, key=len, reverse=True)
+    # Create a big OR regex that matches any of the substrings to replace
+    regexp = re.compile('|'.join(map(re.escape, substrs)))
+    # For each match, look up the new string in the replacements
+    return regexp.sub(lambda match: replacements[match.group(0)], string)
+
+
+####
+def replacevariables(listvariables, replacementrules, twice= True):
+    '''
+    Using the dictionary of replacementrules to convert variables in listvariables into numerical values.
+
+    Arguments
+    --
+    listvaribles: a list of variables containing algebraic expression
+    replacementrules: a dictionary mapping the algebraic expressions onto numbers as strings
+    twice: if True, run replacementrules twice to catch algebraic expressions that are also defined as algebraic expressions
+    '''
+    import numexpr as ne
+    if twice:
+        return np.array([ne.evaluate(multireplace(multireplace(il, replacementrules), replacementrules))
+                        for il in listvariables]).flatten()
+    else:
+        return np.array([ne.evaluate(multireplace(il, replacementrules))
+                        for il in listvariables]).flatten()
+
+####
+def prContents(media=False, strains=False, filename='contents.xls', numStrains=False, numMedia=False, swapRowCol=False, excel=True):
+	'''
+	prContents(media=False, strains=False, filename='contents.xls', numStrains=False, numMedia=False, swapRowCol=False)
+		Automatically create content templates for plate reader experiments. 
+	
+	Notes:
+	-As of this version, replicates are clustered together.
+	-len(strains)*len(media) cannot exceed 96.
+	-same number of replicates for each condition.
+	-REF strains and null must explicitly be added. 
+		RECOMMENDED: to minimize the null, generate without it and edit final file.
+	-By default puts strains in columns and media by rows. Invert this with swapRowCol
+	-
+		
+	'''
+	from string import ascii_uppercase
+	alphabet=list(string.ascii_uppercase)
+	
+	##in case no strains are added
+	
+	if numStrains==False and strains==False:
+		print('please specify either strain names or number of strains')
+	if numStrains==True and strains==True:
+		print('please specify either strain names or number of strains')
+		return 0
+	if media==False:
+		media= ['media'+j for j in alphabet]
+	if strains==False:
+		strains= alphabet[0:(numStrains)]
+	
+	numStrains= len(strains)
+	numMedia= len(media)
+	#this can radily be converted into a dataframe
+	if swapRowCol==True:
+		temp=media
+		media=strains
+		strains=temp
+		numMedia=len(media)
+		numStrains=len(strains)
+	
+	strainTemplate=numpy.matlib.repmat(np.concatenate([numpy.matlib.repmat(j, 1, int(12/numStrains)) for j in strains], axis=1), 8,1)
+	mediaTemplate=numpy.matlib.repmat(np.concatenate([numpy.matlib.repmat(j, int(8/numMedia),1) for j in media], axis=0),1, 12)
+	
+	#if the idea is to swaps strains to rows and media to column, we have to swap media and strains and also the order in which the sentence
+	# is made. 
+	
+	if swapRowCol==True:
+		temp=strainTemplate
+		strainTemplate= mediaTemplate
+		mediaTemplate=temp
+	
+	##makeSentence is an atomic function to put strain and media together
+	makeSentence=lambda x,y: x+' in '+y
+
+	totSpace=30 ##we fill a receiver array with 25 blank spaces because any string longer than this will be trimmed off. shorter seems fine
+	arr=numpy.matlib.repmat(' '*totSpace, 8,12) 
+	for j in range(0,8):
+		for k in range(0, 12):
+			arr[j,k]= makeSentence(strainTemplate[j,k], mediaTemplate[j, k])
+	
+	##making a dataframe of the template, with letter columns
+	contents=pd.DataFrame(arr, index=alphabet[0:8], columns=range(1, 13))
+	if excel==True:
+		contents.to_excel(filename)
+	return contents
+
+
+
+
+
+
+

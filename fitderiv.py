@@ -83,8 +83,6 @@ def plotxyerr(x, y, xerr, yerr, xlabel= 'x', ylabel= 'y', title= '', color= 'b',
 
 class fitderiv:
     '''
-    Version 1.0
-
     to fit data and estimate the time derivative of the data using Gaussian processes
 
     A typical work flow is:
@@ -116,7 +114,7 @@ class fitderiv:
         q.ddf : fitted second time-derivative
         q.ddfvar : variance (error) in the fitted second time-derivative
 
-    Statistics are stored in a dictionary, q.d, with keys:
+    Statistics are stored in a dictionary, q.ds, with keys:
         'max df' : max time derivative
         'time of max df' : time at which the max time derivative occurs
         'inverse max df' : the timescale found from inverting the max time derivative
@@ -162,6 +160,7 @@ class fitderiv:
         warn: if False, warnings created by covariance matrices that are not positive semi-definite are stopped
         linalgmax: number of attempts (default is 3) if a linear algebra (numerical) error is generated
         '''
+        self.version= '1.02'
         self.ylabel= ylabel
         self.logs= logs
         if not warn:
@@ -262,6 +261,7 @@ class fitderiv:
         fcovp= g.covp
         # save results
         self.g= g
+        self.logmaxlike= -g.nlml_opt
         self.hparamerr= g.hparamerr
         self.lth= g.lth_opt
         self.fmnp= fmnp
@@ -396,16 +396,18 @@ class fitderiv:
         '''
         ds= self.ds
         statd= {}
+        lenstr= np.max([len(s) for s in self.stats])
         for s in self.stats:
             statd[s]= ds[s]
-            statd[s + ' std']= errorfac*np.sqrt(ds[s+' var'])
+            statd[s + ' std']= errorfac*np.sqrt(ds[s +' var'])
             statd[s + ' stderr']= np.sqrt(ds[s+' var'])/np.sqrt(self.nosamples)
             if performprint:
+                stname= s.rjust(lenstr + 1)
                 if showerrors:
-                    print('%24s= %8e +/- %8e [%8e]' % (s, statd[s], statd[s +' std'],
-                                                       statd[s + ' stderr']))
+                    print('{:s}= {:6e} +/- {:6e} [{:6e}]'.format(stname, statd[s], statd[s +' std'],
+                                                                 statd[s + ' stderr']))
                 else:
-                    print('%24s= %8e' % (s, statd[s]))
+                    print('{:s}= {:6e}'.format(stname, statd[s]))
         return statd
 
 

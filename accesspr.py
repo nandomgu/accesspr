@@ -207,7 +207,7 @@ def alignTime(p, media, strain, FL='c-GFPperod', centerAtPeakFL=0):
 	#out= {'alignedTime': alignedTimeVector , 'rawFL':rawFLVector ,'normalizedFL':normalizedFLVector , 'peakFL':peak,  'peakTime':peakTime, 'gr':p.d[media][strain]['gr']}
 	alignedTimeVector=p.t-centeredTime
 	out=alignedTimeVector
-	return out
+	return out, centeredTime
 	
 def normalizeOverTime(p, media, strain, dtype=normalflperod, subtractBg=0):
     rawFLVector=p.d[media][strain][dtype]
@@ -219,11 +219,63 @@ def alignStats(p, media, strain, dtype, subtractBg=0):
     rawFLVector=p.d[media][strain][dtype]
     noBgFLVector=p.d[media][strain][dtype]-np.nanmin(p.d[media][strain][dtype])
     normalizedFLVector=(noBgFLVector-np.nanmean(noBgFLVector))/np.nanstd(noBgFLVector)
-    normalizedFLPeak=max(normalizedFLVector)
-    alignedTimeVector=alignTime(p,media,strain)
+    normalizedFLPeak=np.nanmax(normalizedFLVector)
+    alignedTimeVector, centeredTime=alignTime(p,media,strain)
     alignedPeakTime=alignedTimeVector[np.where(normalizedFLVector==np.nanmax(normalizedFLVector))]
+    FLPeak=np.nanmax(rawFLVector)
+    halfFL=FLPeak/2
+    #print('halffl='+str(halfFL))
     absolutePeakTime=p.t[np.where(rawFLVector==np.nanmax(rawFLVector))]
-    out= {'rawFL': rawFLVector, 'normalizedFL': normalizedFLVector, 'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime}
+    ##find the first value at which half the expression is reached, finding the timepoint where the difference is minimal.
+    #FUTURE WORK: could be improved to be found by interpolation to maximise precision. and to make sure that only 
+    #points before the peak time are recovered.
+    y=rawFLVector-halfFL
+    g= scint.interp1d(p.t, y)
+    tresampled=np.linspace(p.t[0], p.t[-1], 10000)
+    yresampled=g(tresampled)
+    f = scint.UnivariateSpline(tresampled, yresampled, s=0)
+    try:
+        roots=f.roots() #out of all the roots we get the earliest
+        ##out of all the roots, we get the one closest to the absolute peak time
+        subtraction= roots-absolutePeakTime
+        ##we want negative and closest
+        negatives= subtraction<0 ##those who are before the peak time
+        if sum(negatives)==0:
+            negatives=False(negatives) ##if there are no negatives well, whateever, try with anything available.
+        closest= np.where(abs(subtraction[negatives])== np.min(abs(subtraction[negatives])))
+        timeToHalfFL=roots[closest]
+        #whichishalf=np.where(abs(rawFLVector-halfFL)==np.nanmin(abs(rawFLVector-halfFL)))
+        #recvering the timepoint at which the half is reached.
+    except:
+        print('problem finding half fluorescence time for '+strain+' in '+media+'. obtaining time stats without FL background.' )
+        try:
+        #removing background fluorescence to improve the calculation
+            noBGPeak= np.nanmax(noBgFLVector)
+            y=noBgFLVector-noBGPeak/2
+            g= scint.interp1d(p.t, y)
+            tresampled=np.linspace(p.t[0], p.t[-1], 10000)
+            yresampled=g(tresampled)
+            f = scint.UnivariateSpline(tresampled, yresampled, s=0)
+            roots=f.roots() #out of all the roots we get the earliest
+            ##out of all the roots, we get the one closest to the absolute peak time
+            subtraction= roots-absolutePeakTime #eak time
+            ##we want negative and closest
+            negatives= subtraction<0 ##those who are before the peak time
+            if sum(negatives)==0:
+                negatives=False(negatives) ##if there are no negatives well, whateever, try with anything available.
+            closest= np.where(abs(subtraction[negatives])== np.min(abs(subtraction[negatives]))) ### time from half fl to full fl. the sign of the steepness determines whether this was found before (negative) or after the peak.
+            timeToHalfFL=roots[closest][0]
+        except:
+            print('problem finding half fluorescence time for'+strain+' in '+media+'\n' )
+            halfFLToPeakTime=np.nan
+            slope=np.nan
+            timeToHalfFL=np.nan 
+    responseTimeAligned=timeToHalfFL-centeredTime
+    halfFLToPeakTime= timeToHalfFL-absolutePeakTime ### time from half fl to full fl. the sign of the steepness determines whether this was found before (negative) or after the peak.
+    steepness=1/halfFLToPeakTime[0]
+    slope= (FLPeak-halfFL)/(absolutePeakTime-timeToHalfFL)
+    #timeToHalfFL=p.t[np.where(rawFLVector==minDiffHalf)]
+    out= {'rawFL': rawFLVector, 'normalizedFL': normalizedFLVector, 'FLPeak': FLPeak, 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime[0], 'slope': slope[0], 'responseTime': timeToHalfFL, 'steepness': steepness, 'half2PeakTime': halfFLToPeakTime[0], 'responseTimeAligned': responseTimeAligned, 'halfFL': halfFL }
     return out
 def str2numTS(tsString):
     tsArray= np.array(tsString.split())
@@ -234,7 +286,6 @@ def extractTS(df, media, strain, tstype='FLperODTS'):
     b=df['media']==media
     out=df[a & b][tstype].values
     #out=df[a & b][tstype].values[0].split()
-    
     
     
     return( out)
@@ -523,13 +574,12 @@ class accesspr:
 
     '''
 
-    def __init__(self, source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False):
+    def __init__(self, source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True):
         '''
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
         '''
         self.prtype='Tecan'
         self.data = {}
-        self.FL={}
         self.experimentDuration={}
         self.source = source
         self.version='4.6'
@@ -557,9 +607,9 @@ class accesspr:
             self.experimentDuration[filename]=self.data[filename].t[-1]
         self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
         #this stores the absolute duration (in hrs) of the shortest experiment
-        self.extractionFields=['experiment','machine', 'media','strain', 'InitialOD', 'FinalOD', 'InitialRawFL', 'InitialFLperOD', 'FinalFLperOD', 'FLPeak', 'FLAbsPeakTime', 'FLAlignedPeakTime', 'lagTime', 'realTime', 'alignedTime', 'FLperODTS', 'maxGR', 'maxGRvar', 'maxGRTime', 'FLperodAUC', 'grAUC', 'halfFLAreaTime', 'halfGRAreaTime' ]
-        self.Aliases={'Hxt4': '409.Hxt4'}
-        self.mediaValue={'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2}
+        self.extractionFields=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC','InitialRawFL','InitialFLperOD','FinalFLperOD','FLPeak','FLAbsPeakTime','FLAlignedPeakTime','FLperodAUC','slope','responseTime','steepness','responseTimeAligned']
+        self.extractionFieldsOD=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC']
+        self.mediaValue={'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2, 'SucGlu 1%': 0.5, 'SucGlu 1.8% 0.2%': 0.2/2, 'SucGlu 0.2% 1.8%': 1.8/2}
         self.strainAlias={'YST_498': 'Hxt1', 'YST_499': 'Hxt1', 'Hxt4': 'Hxt4', 'Hxt2': 'Hxt2','Hxt3': 'Hxt3','Hxt5': 'Hxt5','Hxt6': 'Hxt6','Hxt7n': 'Hxt7' }
         self.listcontents(verbose=False)
         #self.getAllContents()
@@ -567,47 +617,54 @@ class accesspr:
         self.mediaColors=False ##### list of colours to be assigned to each media during plotting routines. currently not in use.
         self.exptColors=False  ##### list of colours to be assigned to each media during plotting routines. currently not in use.
         self.aligned=False
+        self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
+        self.statContents=pd.DataFrame(columns=['FLperod', 'gr'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
         self.wildTypeList=['WT', '77.WT', '229.WT']
+        self.machines={}
+        self.serialnumbers={}
         try:
             self.getAllContents()
         except:
             print('Impossible to get  allContents list for all experiments.')
         self.refstrains=dict()
-        self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.statContents=pd.DataFrame(columns=['FLperod', 'gr'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.containsstat('gr', printstats=False)
-        self.containsstat('GFP', printstats=False)
-        self.containsstat('c-GFPperod', printstats=False)
-        self.containsstat('GFP100', printstats=False)
-        self.containsstat('c-GFP100perod', printstats=False)
-        self.containsstat('GFP90', printstats=False)
-        self.containsstat('c-GFP90perod', printstats=False)
-        self.containsstat('GFP80', printstats=False)
-        self.containsstat('c-GFP80perod', printstats=False)
-        self.containsstat('GFP70', printstats=False)
-        self.containsstat('c-GFP70perod', printstats=False)
-        self.containsstat('GFP60', printstats=False)
-        self.containsstat('c-GFP60perod', printstats=False)
-        self.containsstat('GFP50', printstats=False)
-        self.containsstat('c-GFP50perod', printstats=False)
-        #self.containsstat('FLperod', printstats=False)
-        self.consensusFLs=[]
-        self.consensusFL=[]
-        self.consensusFLperod=[]
-        self.machines={}
-        self.serialnumbers={}
-        for key in self.data.keys():
-            self.FL[key]={}
-        try:    
-            self.assignFL(mainFL=FL, mainFLperod=FLperod)
-        except:
-            print('problems finding consensus fluorescence')
+        if analyseFL==True:
+            self.analyseFL=True
+            self.FL={}
+            self.containsstat('gr', printstats=False)
+            self.containsstat('GFP', printstats=False)
+            self.containsstat('c-GFPperod', printstats=False)
+            self.containsstat('GFP100', printstats=False)
+            self.containsstat('c-GFP100perod', printstats=False)
+            self.containsstat('GFP90', printstats=False)
+            self.containsstat('c-GFP90perod', printstats=False)
+            self.containsstat('GFP80', printstats=False)
+            self.containsstat('c-GFP80perod', printstats=False)
+            self.containsstat('GFP70', printstats=False)
+            self.containsstat('c-GFP70perod', printstats=False)
+            self.containsstat('GFP60', printstats=False)
+            self.containsstat('c-GFP60perod', printstats=False)
+            self.containsstat('GFP50', printstats=False)
+            self.containsstat('c-GFP50perod', printstats=False)
+            #self.containsstat('FLperod', printstats=False)
+            self.consensusFLs=[]
+            self.consensusFL=[]
+            self.consensusFLperod=[]
+            for key in self.data.keys():
+                self.FL[key]={}
+            try:    
+                self.assignFL(mainFL=FL, mainFLperod=FLperod)
+            except:
+                print('problems finding consensus fluorescence')
+                self.assignFL(mainFL='GFP')
+        else:
+            self.analyseFL=False
         try:
             self.alignAll(rerun=True)
         except:
-            self.assignFL(mainFL='GFP')
-            print('Impossible to find gr. Consider running getstats.')
+            print('Problem aligning experiments, possibly owing to missing growth rate. Consider running .getstats()')
+            
         self.findMachines()
+        self.replicateLocations()
     def findMachines(self):
         for expt in self.allExperiments:
             try:
@@ -782,7 +839,12 @@ class accesspr:
                     self.statContents.loc[key, stat]=percentage
                     if printstats==True:
                         print(self.statContents)
-            
+    #def backup(self):
+    #    '''generates numbered backup pickles to backtrack processing in case something fails'''
+    #def resetFL(self):
+    #    '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
+    #    for expt in xpr.allExperiments:
+    #        xpr.data[expt].reset()
     def containssetup(self, media, strain, verbose=False, strict=True, musthave='gr'):
         '''
         Creates a list of experiments that contain the specified conditions.
@@ -835,7 +897,7 @@ class accesspr:
         cl=cl.drop_duplicates()
         self.allContents= pd.DataFrame(np.column_stack([cl.values[:,0], cl.values[:,1]]), columns=['media', 'strain'])
 
-    def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True, mediausemean=False):
+    def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True, mediausemean=False, ignoreneg=True):
         ''' function designed to run correctauto on all experiments, or combinations of media and strains. 
         '''
         if experiments=='all':
@@ -849,14 +911,14 @@ class accesspr:
             localref= np.array(refstrain)[whichref] #hopefully there is never 2 different refs
             try:
                 print('experiment', key, ':')
-                self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia )
+                self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia , ignoreneg=ignoreneg, mediausemean=mediausemean)
                 plt.close('all')
                 break
             except: #LinAlgErr:
                 for e in range(2,20):
                     try:
                         print('try number '+str(e))
-                        self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia )
+                        self.data[key].correctauto(f=f, conditions=media, strains=strains, refstrain=localref, figs=figs, correctOD=correctOD, noruns=noruns, bd=bd, no1samples=no1samples, correctmedia=correctmedia, mediausemean=mediausemean, ignoreneg=ignoreneg )
                     except:
                         print('something went wrong.')
                 plt.close('all')
@@ -975,7 +1037,7 @@ class accesspr:
                     print('Experiment pickle file'+ self.source+key+' has been replaced.')
         self.containsstat('gr')
 
-    def plotalign(self, media, strain):
+    def align(self, media, strain, alignFL=False):
         '''
         In the current version 'plotalign(self,media,strain,type)' sets the time vector <t0,...,tn> 
         to zero at t.where(data == max).
@@ -991,28 +1053,30 @@ class accesspr:
                 alignedTimeGR=np.nan
                 alignedTimeFL=np.nan
             else:
-                mainFL=self.FL[key]['mainFL']
-                mainFLperod=self.FL[key]['mainFLperod']
                 centeredTimeGR=self.data[key].t[np.where(self.data[key].d[media][strain]['gr']==max(self.data[key].d[media][strain]['gr']))]
                 alignedTimeGR=self.data[key].t-centeredTimeGR
-                try:
-                    centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFLperod]==max(self.data[key].d[media][strain][mainFLperod]))]
-                except KeyError:
+                if alignFL==True:
+                    mainFL=self.FL[key]['mainFL']
+                    mainFLperod=self.FL[key]['mainFLperod']
                     try:
-                        print('Warning: experiment '+key+' does not contain corrected '+mainFLperod+'. Attempting to use raw '+mainFL+' peak') 
-                        centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+'mn']==max(self.data[key].d[media][strain][mainFL+'mn']))]
-                    except:
-                        print('Fluorescence peak failed to be found. setting centered FL time to NaN')
-                        #centeredTimeFL=np.nan #np.matlib.repmat(np.nan,np.size(xpr.data[key].t,0),1).reshape((np.size(xpr.data[key].t,0),))
-                        flag=1
-                if flag==1:
-                    alignedTimeFL=np.matlib.repmat(np.nan,np.size(self.data[key].t,0),1).reshape((np.size(self.data[key].t,0),))
-                else:
-                    alignedTimeFL=self.data[key].t-centeredTimeFL
-            self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
+                        centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFLperod]==max(self.data[key].d[media][strain][mainFLperod]))]
+                    except KeyError:
+                        try:
+                            print('Warning: experiment '+key+' does not contain corrected '+mainFLperod+'. Attempting to use raw '+mainFL+' peak') 
+                            centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+'mn']==max(self.data[key].d[media][strain][mainFL+'mn']))]
+                        except:
+                            print('Fluorescence peak failed to be found. setting centered FL time to NaN')
+                            #centeredTimeFL=np.nan #np.matlib.repmat(np.nan,np.size(xpr.data[key].t,0),1).reshape((np.size(xpr.data[key].t,0),))
+                            flag=1
+                    if flag==1:
+                        alignedTimeFL=np.matlib.repmat(np.nan,np.size(self.data[key].t,0),1).reshape((np.size(self.data[key].t,0),))
+                        self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
+                    else:
+                        alignedTimeFL=self.data[key].t-centeredTimeFL
+                        self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
             self.data[key].d[media][strain]['Time centered at gr peak'] = alignedTimeGR
 
-    def alignAll(self, rerun=False):
+    def alignAll(self, rerun=False, alignFL=False):
         '''
         In the current version 'plotalign(self,media,strain,type)' sets the time vector <t0,...,tn> 
         to zero at t.where(data == max).
@@ -1032,13 +1096,20 @@ class accesspr:
                         continue ###this is to be replaced by the use of raw fluorescence
                     else:
                         #print('aligning media '+media[x]+';strain: '+strains[x])
-                        self.plotalign(media[x], strains[x])
-            self.aligned=True
-            print('Experiments aligned successfully.')
-        else:
+                        self.plot(media[x], strains[x], alignFL=alignFL)
+            self.containsstat('gr')
+            self.containsstat('Time centered at gr peak')
+            self.containsstat('Time centered at FL peak')
+            grAlignedFraction=self.statContents['Time centered at gr peak'].sum()/ np.size(self.statContents['Time centered at gr peak'])
+            if grAlignedFraction==1:
+                self.aligned=True
+                print('Experiments aligned successfully.')
+            else:
+                self.aligned=False
+                print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
 
-    def plotReplicateMean(self, media, strain, experiments='all', dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
+    def plotReplicateMean(self, media, strain, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
             try:
@@ -1051,9 +1122,9 @@ class accesspr:
         cv=[]
         for m in media:
             #print('processing '+m)
-            interpolated= self.interpTimes(m, strain, dtype=dtype, experiments=experiments, centeringVariable=centeringVariable)
+            interpolated= self.interpTimes(m, strain, dtype=dtype, experiments=experiments, ignoreExps=ignoreExps, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
-            interpolated['time']=interpolated['time'][excludeFirst:excludeLast]
+            interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
             if normalise==True:
                 interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
             mn=np.nanmean(interpolated[dtype],1)
@@ -1072,19 +1143,30 @@ class accesspr:
             if bootstrap>0:
                 totalmn=np.nanmean(reps,1)
                 totalsd=np.nanstd(reps,1)
-                plt.plot(interpolated['time'], totalmn, color=col)
-                plt.fill_between(interpolated['time'], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
+                plt.plot(interpolated[centeringVariable], totalmn, color=col)
+                plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
                 plt.xlabel(centeringVariable)
                 plt.ylabel(dtype)
             else:
-                plt.plot(interpolated['time'], mn, color=col)
-                plt.fill_between(interpolated['time'], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
+                plt.plot(interpolated[centeringVariable], mn, color=col)
+                plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
                 plt.xlabel(centeringVariable)
                 plt.ylabel(dtype)
                 ###then get their mean
                 ###then add it to the column         
         return cv
-
+    def getMediaValues(self, df=None):
+        mediaValue=[]
+        if df is None:
+            df=self.extractAllInfo(excludeNull=False)
+        for j in range(0, np.size(df['media'])):
+            try:
+                #print( df['media'][j] + 'is'+ str(self.mediaValue[df['media'][j]]))
+                mediaValue.append(self.mediaValue[df['media'][j]])
+            except:
+                mediaValue.append(np.nan)
+        df['mediaValue']=mediaValue
+        return df
     def colorScatter(self, media, strain, experiments=False, xstat=False, ystat='FLperod', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=40, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=False, vmin=0, vmax=0, xlabel=1, ylabel=1):
         if experiments==False:
             self.containssetup(media,strain)
@@ -1108,7 +1190,7 @@ class accesspr:
             plt.ylabel(self.typeofdata + ' in a.u.')
         legends = []
         if aligned:
-            self.plotalign(self.media, self.strain)
+            self.align(self.media, self.strain)
             for key in self.containslist: 
                 if ppf.hasKey(D[key].d, media) and ppf.hasKey(D[key].d[media], strain)\
                     and ppf.hasKey(D[key].d[media][strain], typeofdata):
@@ -1176,7 +1258,7 @@ class accesspr:
         plt.xlabel(timestr[centerAtFLPeak])
         plt.ylabel(dtype + ' in a.u.')
         legends = []
-        self.plotalign(self.media, self.strain)
+        self.align(self.media, self.strain)
         if normalize==1:
             for key in self.containslist: 
                 if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
@@ -1308,6 +1390,16 @@ class accesspr:
             fin.loc[j,times]= f(times) #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
         return fin
         
+    def replicateLocations(self):
+        daf=pd.DataFrame(index=[self.allContents['strain'], self.allContents['media']], columns=self.allExperiments)
+        daf=daf.fillna(0)
+        for j in daf.index:
+            self.containssetup(media=j[1], strain=j[0], strict=False)
+            for c in self.containslist:
+                daf.loc[j, c]=1 
+        self.conditionLocTable=daf
+        self.numReplicates=daf.sum(1)
+        
     def text2d(self, media=False, strains=False, dimx='FinalOD', dimy='maxGR', strainColors=False, xlim=False, ylim=False, markersize=500, newFig=True):
         if newFig==True:
             plt.figure()
@@ -1336,13 +1428,17 @@ class accesspr:
             experimentList=experiments
         else:
             experimentList=self.containslist
+        print(experimentList)
+        if ignoreExps!=False:
+            try:
+                [experimentList.remove(j) for j in ignoreExps]
+            except:
+                print(str(ignoreExps)+'is not on the list')
         interpRange=[]
         maxLengths=[]
         startPoints=[]
         adjustedTimes=dict()
         for expt in experimentList: ###retireving the limiting values for interpolation amongst all experiments.
-            if ignoreExps != False and expt in ignoreExps:
-                continue
             #print('processing experiment'+expt+'...')
             adjustedTimes[expt]=dict()
             maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
@@ -1371,36 +1467,36 @@ class accesspr:
                 adjustedTimes[expt][centeringVariable]=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
             except:
                 print('problems retrieving '+centeringVariable+'. attempting to align specific condition...')
-                xpr.plotalign(media, strain)
+                self.align(media, strain)
                 adjustedTimes[expt][centeringVariable]=np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2)
             #print('adjustedTimes of '+expt+': ', adjustedTimes[expt]['time']) 
             #print(np.column_stack([adjustedTimes[expt]['time'],adjustedTimes[expt][dtype]]))
         finalDict={};
         finalDict['experiments']=experimentList
-        finalDict[dtype]=np.empty([np.size(adjustedTimes[experimentList[0]]['time']), np.size(experimentList)], dtype=None)
+        finalDict[dtype]=np.empty([np.size(adjustedTimes[experimentList[0]][centeringVariable]), np.size(experimentList)], dtype=None)
 
         try:
             for j in range(0, np.size(experimentList)): #arbitrarily taking the first experiment in the list as reference
-                fint=scint.interp1d(np.around(adjustedTimes[experimentList[j]]['time'],2),adjustedTimes[experimentList[j]][dtype])
-                finalDict['time']=np.around(adjustedTimes[experimentList[0]]['time'],2)
-                finalDict[dtype][:, j]=fint(np.around(adjustedTimes[experimentList[0]]['time'],2))
+                fint=scint.interp1d(np.around(adjustedTimes[experimentList[j]][centeringVariable],2),adjustedTimes[experimentList[j]][dtype])
+                finalDict[centeringVariable]=np.around(adjustedTimes[experimentList[0]][centeringVariable],2)
+                finalDict[dtype][:, j]=fint(np.around(adjustedTimes[experimentList[0]][centeringVariable],2))
 
         except ValueError:
             print('Warning: time out of range. trying interpolation from full time vectors...')
             #try:
             for j in range(1, np.size(experimentList)): #arbitrarily taking the first experiment in the list as reference
                 try:
-                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain]['time'],2),self.data[experimentList[j]].d[media][strain][dtype])
+                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain][centeringVariable],2),self.data[experimentList[j]].d[media][strain][dtype])
                 except:
                     print(dtype+' cannot be interpolated as single dimension. attempting column-averaging...')
-                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain]['time'],2),self.data[experimentList[j]].d[media][strain][dtype].mean(1))
-                temptime= adjustedTimes[experimentList[0]]['time'] ##[0:-1]
+                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain][centeringVariable],2),self.data[experimentList[j]].d[media][strain][dtype].mean(1))
+                temptime= adjustedTimes[experimentList[0]][centeringVariable] ##[0:-1]
                 #temptime[0]=temptime[0]+exceptionShift
                 #temptime[-1]=temptime[-1]- exceptionShift
                 #print('expt time: ' ,np.around(adjustedTimes[experimentList[j]]['time'],2))
                 #print('interpolation time: ' ,temptime)
                 finalDict[dtype][:, j]=fint(temptime)
-                finalDict['time']=temptime
+                finalDict[centeringVariable]=temptime
             #except ValueError:
             #print('Error: interpolation time out of bounds. please screen for time discrepancies')
  
@@ -1432,13 +1528,13 @@ class accesspr:
         #first we take the real time point indices that do not exceed the upper limit, which is in hours. say, if indices 161-200 are above, then you consider 1-160
         #then we interpolate the timepoints
         
-    def extractRepInfo(self, media, strain, strict=True):
+    def extractRepInfo(self, media, strain, strict=True, onlyGrowth=False):
         '''
         generates a table of basic info for all replicates
         '''
         print('extracting '+strain+' in '+media)
         self.containssetup(media, strain, strict=strict)
-        self.plotalign(media, strain)
+        self.align(media, strain)
         containslist=self.containslist
         timepointRange=[]
         FLVector={}
@@ -1467,43 +1563,74 @@ class accesspr:
         FLperodAUC=[]
         halfFLAreaTime=[]
         halfGRAreaTime=[]
+        responseTime=[]
+        responseTimeAligned=[]
+        steepness=[]
+        slope=[]
+        FLLag=[] #defined as the time to reach half the total fl from the beginning
         for i in range(0, np.shape(self.containslist)[0]): 
-            try:
-                nflod=self.FL[containslist[i]]['mainFLperod']
-                #if the mock assignment below crashes, there is no FLperod
-                checkingFL= self.data[containslist[i]][media][strain][nflod]
-            except:
-                InitialFLperOD.append(np.nan)
-                FinalFLperOD.append(np.nan)
-                FLPeak.append(np.nan)
-                FLAbsPeakTime.append(np.nan)
-                FLAlignedPeakTime.append(np.nan)
-                FLperodAUC.append(np.nan)
-            nfl=self.FL[containslist[i]]['mainFL']
+            #if the mock assignment below crashes, there is no FLperod
+            #checkingFL= self.data[containslist[i]].d[media][strain][nflod]
+            #except:
+            #    InitialFLperOD.append(np.nan)
+            #    FinalFLperOD.append(np.nan)
+            #    FLPeak.append(np.nan)
+            #    FLAbsPeakTime.append(np.nan)
+            #    FLAlignedPeakTime.append(np.nan)
+            #    FLperodAUC.append(np.nan)
+            #print('nfl= '+nfl)
             if ppf.hasKey(self.data[containslist[i]].d, media) and ppf.hasKey(self.data[containslist[i]].d[media], strain):
                 #plt.plot(self.aligned[key], normalizeOverTime(self.data[key], self.media, self.strain), color=col)
                 #out= {'normalizedFL': normalizedFLVector, 'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime
                 #print 'strain is ', strain, 'strain is not WT: ', strain != "WT"
                 if strain != 'null':
-                    #print('nflod is', nflod)
-                    #print('nfl is', nfl)
-                    out=alignStats(self.data[containslist[i]], media, strain, dtype=nflod)
-                    InitialFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][0])
-                    FinalFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][np.size(self.data[containslist[i]].d[media][strain][nflod])-1])
-                    FLPeak.append(out['FLPeak'])
-                    FLAbsPeakTime.append(float(out['absolutePeakTime']))
-                    #print(out['alignedPeakTime'])
-                    FLAlignedPeakTime.append(float(out['alignedPeakTime']))
-                    FLperODTS.append(np.str(self.data[containslist[i]].d[media][strain][nflod]).replace(']', '').replace('[', ''))
-                    FLperodAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, nflod))
-                    hat=halfAUCTime(self.data[containslist[i]], media, strain, nflod)
-                    #print(hat)
-                    try:
-                        halfFLAreaTime.append(float(hat))
-                    except:
-                        print('problem calculating the half area time for '+strain+' in '+media)
-                        halfFLAreaTime.append(np.nan)
-                else:
+                    ods=self.data[containslist[i]].d[media][strain]['OD']
+                    maxGR.append(self.data[containslist[i]].d[media][strain]['max growth rate'])
+                    maxGRvar.append(self.data[containslist[i]].d[media][strain]['max growth rate var'])
+                    maxGRTime.append(self.data[containslist[i]].d[media][strain]['time of max growth rate'])
+                    tpr=str(0)+'-'+str(np.size(self.data[containslist[i]].t))
+                    timepointRange.append(tpr)
+                    iod=np.nanmean(ods[0,:])
+                    initialOD.append(iod)
+                    lagTime.append(self.data[containslist[i]].d[media][strain]['lag time'])
+                    FinalOD.append(np.nanmean(ods[np.size(ods,0)-1,:]))
+                    medialist.append(media)
+                    strainlist.append(strain)
+                    grAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, 'gr'))
+                    if self.analyseFL:
+                        out=alignStats(self.data[containslist[i]], media, strain, dtype=nflod)
+                        nflod=self.FL[containslist[i]]['mainFLperod']
+                        nfl=self.FL[containslist[i]]['mainFL']
+                        print('nfl= '+nflod)
+                        InitialFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][0])
+                        FinalFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][np.size(self.data[containslist[i]].d[media][strain][nflod])-1])
+                        FLPeak.append(out['FLPeak'])
+                        FLAbsPeakTime.append(float(out['absolutePeakTime']))
+                        #print('apt = '+str(FLAbsPeakTime))
+                        FLAlignedPeakTime.append(float(out['alignedPeakTime']))
+                        FLperODTS.append(np.str(self.data[containslist[i]].d[media][strain][nflod]).replace(']', '').replace('[', ''))
+                        FLperodAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, nflod))
+                        FLs=self.data[containslist[i]].d[media][strain][nfl]
+                        InitialRawFL.append(np.nanmean(FLs[0, :]))
+                        autoFLs=self.data[containslist[i]].d[media][strain]['AutoFL']
+                        try:
+                            responseTime.append(out['responseTime'][0])
+                        except:
+                            responseTime.append(out['responseTime'])
+                        try:
+                            responseTimeAligned.append(out['responseTimeAligned'][0])
+                        except:
+                            responseTimeAligned.append(out['responseTimeAligned'])
+                        steepness.append(out['steepness'])
+                        slope.append(out['slope'])
+                        #hat=halfAUCTime(self.data[containslist[i]], media, strain, nflod)
+                        #print(hat)
+                        #try:
+                        #    halfFLAreaTime.append(float(hat))
+                        #except:
+                        #    print('problem calculating the half area time for '+strain+' in '+media)
+                        #    halfFLAreaTime.append(np.nan)
+                if self.analyseFL==False or strain=='null':
                     FLperODTS.append(np.nan)
                     InitialFLperOD.append(np.nan)
                     FinalFLperOD.append(np.nan)
@@ -1512,33 +1639,32 @@ class accesspr:
                     FLAlignedPeakTime.append(np.nan)
                     FLperodAUC.append(np.nan)
                     halfFLAreaTime.append(np.nan)
+                    responseTime.append(np.nan)
+                    responseTimeAligned.append(np.nan)
+                    slope.append(np.nan)
+                    steepness.append(np.nan)
                 machine.append(self.machines[containslist[i]])
                 experiment.append(containslist[i])
                 realTime.append(np.str(self.data[containslist[i]].t.T).replace(']', '').replace('[', '').replace('\n', ''))
-                alignedTime.append(np.str(alignTime(self.data[containslist[i]], media, strain).T).replace(']', '').replace('[', '').replace('\n', '') )
-                ods=self.data[containslist[i]].d[media][strain]['OD']
-                FLs=self.data[containslist[i]].d[media][strain][nfl]
+                at, ct=alignTime(self.data[containslist[i]], media, strain)
+                alignedTime.append(str(at).replace(']', '').replace('[', '').replace('\n', '') )
                 #print('FLs is', FLs)
-                autoFLs=self.data[containslist[i]].d[media][strain]['AutoFL']
-                tpr=str(0)+'-'+str(np.size(self.data[containslist[i]].t))
-                timepointRange.append(tpr)
-                iod=np.nanmean(ods[0,:])
-                initialOD.append(iod)
-                lagTime.append(self.data[containslist[i]].d[media][strain]['lag time'])
-                FinalOD.append(np.nanmean(ods[np.size(ods,0)-1,:]))
-                maxGR.append(self.data[containslist[i]].d[media][strain]['max growth rate'])
-                maxGRvar.append(self.data[containslist[i]].d[media][strain]['max growth rate var'])
-                maxGRTime.append(self.data[containslist[i]].d[media][strain]['time of max growth rate'])
-                InitialRawFL.append(np.nanmean(FLs[0, :]))
-                medialist.append(media)
-                strainlist.append(strain)
-                grAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, 'gr'))
-                halfGRAreaTime.append(float(halfAUCTime(self.data[containslist[i]], media, strain, 'gr')))	
-        dataset= list(zip(containslist,machine,medialist, strainlist, initialOD, FinalOD, InitialRawFL, InitialFLperOD, FinalFLperOD, FLPeak, FLAbsPeakTime, FLAlignedPeakTime, lagTime, realTime, alignedTime,FLperODTS, maxGR, maxGRvar, maxGRTime, FLperodAUC, grAUC,halfFLAreaTime,halfGRAreaTime))
-        df= pd.DataFrame(data=dataset, columns=self.extractionFields)
+                #halfGRAreaTime.append(float(halfAUCTime(self.data[containslist[i]], media, strain, 'gr')))	
+        if self.analyseFL:
+            dataset= list(zip(containslist,machine,medialist,strainlist, initialOD,FinalOD, lagTime, realTime, alignedTime, maxGR, maxGRvar,maxGRTime,  grAUC,InitialRawFL, InitialFLperOD, FinalFLperOD, FLPeak, FLAbsPeakTime, FLAlignedPeakTime,FLperodAUC, slope, responseTime, steepness, responseTimeAligned))
+            df= pd.DataFrame(data=dataset, columns=self.extractionFields)
+        else:
+            dataset= list(zip(containslist,machine,medialist,strainlist, initialOD,FinalOD, lagTime, realTime, alignedTime, maxGR, maxGRvar,maxGRTime,  grAUC))
+            df= pd.DataFrame(data=dataset, columns=self.extractionFieldsOD)
         return df
-    def extractAllInfo(self, excludeNull= False, strict=True):
-        df=pd.DataFrame(columns=self.extractionFields)
+    def extractAllInfo(self, excludeNull= False, strict=True, onlyGrowth=False):
+        #making a decision on wether to use only growth data or not
+        if self.analyseFL or onlyGrowth==False:
+            extflds=self.extractionFields
+        else:
+            extflds=self.extractionFieldsOD
+            
+        df=pd.DataFrame(columns=extflds)
         self.getAllContents()
         for x in range(0, np.size(self.allContents,0)):
             if self.allContents.values[x,1]=='null' and excludeNull==True:
@@ -1550,7 +1676,28 @@ class accesspr:
             #    print('Problem extracting '+ self.allContents.values[x,1]+ ' in '+self.allContents.values[x,0])
             #    continue
             #print ' begin df:', df, "end df\n"
+        df= self.getMediaValues(df)
         return df
-
-
-
+    def fixNaNs(self, dtype='GFP80', repairWith='GFP70', experiments=False):
+        self.statContents
+        if experiments==False:
+            experiments=self.allExperiments
+        for expt in experiments:
+            plt.figure()
+            if self.machines[expt]=='Plate Reader 2' :
+                if np.isnan(self.statContents.loc[expt, repairWith])==False:
+                    ppf.transformEach(self.data[expt], stat1=repairWith, stat2=dtype, plot=True)
+                    ppf.replaceStat(self.data[expt], dtype, replaceWith='transformed'+repairWith)
+                    self.containsstat('transformed'+repairWith)
+                else:
+                    try:
+                        if np.isnan(self.statContents.loc[expt, 'GFP75'])==False:
+                            ppf.transformEach(self.data[expt], stat1='GFP75', stat2=dtype, plot=True)
+                            ppf.replaceStat(self.data[expt], 'GFP80', replaceWith='transformedGFP75')
+                            self.containsstat('transformedGFP75')
+                    except:
+                        print('no GFP75')
+                        if np.isnan(self.statContents.loc[expt, 'GFP60'])==False:
+                            ppf.transformEach(self.data[expt], stat1='GFP60', stat2=dtype, plot=True)
+                            ppf.replaceStat(self.data[expt], 'GFP80', replaceWith='transformedGFP60')
+                            self.containsstat('transformedGFP60')

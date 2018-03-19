@@ -32,3 +32,8 @@ MoClo Promoters Analyisis .ipynb
 20170411_Hxt_colorScatter_gr_dgr.pdf
 
 Untitled1.ipynb
+*.pkl
+*.xls
+*.xlsx
+xprBackup.py
+20171107_allMutantTimings
