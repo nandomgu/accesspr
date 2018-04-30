@@ -403,10 +403,9 @@ class accesspr:
     to learn about pandas (especially dataframes) and the seaborn graphics package. 
     
     ***Newest FEATURES***
-    self.serialnumbers, self.machines and self.findMachines() allow to find which PR was used for the experiment.
-    extractAllInfo, timeStat, timeStatAligned and timeStatAll now include a 'machine' field.
-    DFTransform(df, targetVariable, groupVariable, group, scale, shift) allows you to perform a linear transformation of targetVariable
-    *scale+shift, specifically for rows where groupVariable==group **WARNING: this function alters the original dataset for some reason.
+    self.allReplicates contains the condition in every well in every experiment
+    self.plotReplicateMeanNew() and self.interpTimesNew now work with replicate dataframes as an input to include specific replicates
+    selg.getRawData() creates a raw data dictionary to handle the full pr output altogether.
     ATTRIBUTES:
     source: 
         the path of the folder that contains the pickle files
