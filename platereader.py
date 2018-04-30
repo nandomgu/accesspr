@@ -98,6 +98,8 @@ class platereader:
         # specify working directory
         self.wdir= wdir
         self.name= dname.split('.')[0]
+        self.fullname= dname
+
         self.ODfname= ODfname
 
         # general parameters
@@ -124,6 +126,7 @@ class platereader:
         print('Platereader', self.version, ': loading data')
         # define annotation
         if aname == 'default': aname= self.name + '_contents.xlsx'
+        self.aname=aname
         if aname:
             # import annotation
             try:

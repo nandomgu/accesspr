@@ -1122,18 +1122,43 @@ def getAllStrains(p):
 def conditionList(p, excludeNull=False):
     finalmedia=[]
     finalstrains=[]
+    finalexpts=[]
+    finalplateloc=[]
+    #processing the experiment namme by eliminating the root
+    exptname=p.name.split('/')[-1]
     for media in p.d.keys():
         for strain in p.d[media].keys():
             #print('media:', media)
             #print('strains:', strain)
             finalmedia.append(media)
             finalstrains.append(strain)
-            cl=pd.DataFrame(list(zip(finalmedia, finalstrains)), columns= ['media', 'strain'])
+            finalexpts.append(exptname)
+            finalplateloc.append(p.d[media][strain]['plateloc'])
+            cl=pd.DataFrame(list(zip(finalexpts,finalmedia, finalstrains, finalplateloc)), columns= ['experiment', 'media', 'strain', 'plateloc'])
     if excludeNull==True:
         cl=cl[cl['strain']!='null']
     return cl
         
-
+def replicateList(p, excludeNull=False):
+    '''very similar to conditionList but this one has one line per well'''
+    finalmedia=[]
+    finalstrains=[]
+    finalexpts=[]
+    finalplateloc=[]
+    #processing the experiment namme by eliminating the root
+    exptname=p.name.split('/')[-1]
+    for media in p.d.keys():
+        for strain in p.d[media].keys():
+            plateloc=p.d[media][strain]['plateloc']
+            for j in plateloc:
+                finalmedia.append(media)
+                finalstrains.append(strain)
+                finalexpts.append(exptname)
+                finalplateloc.append(j)
+            cl=pd.DataFrame(list(zip(finalexpts,finalmedia, finalstrains, finalplateloc)), columns= ['experiment', 'media', 'strain', 'plateloc'])
+    if excludeNull==True:
+        cl=cl[cl['strain']!='null']
+    return cl
 
 def savePDF(fig, filename='tempfig'):
     import matplotlib.backends.backend_pdf

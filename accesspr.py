@@ -15,6 +15,40 @@ from matplotlib.colors import hex2color
 #from decimal import *
 #getcontext().prec = 3
 
+### RAW DATA FUNCTIONS. functions that receive a rawdata dictionary where rawdata[stat] is a matrix of m wells x n timepoints,
+###coming directly from the plate reader excel sheet.
+
+def internalStd(rawdata, stat, wtindices, fr=0.4, to=0.7, len=30):
+    '''
+    regression, transformedData=internalStd(rawdata, stat, wtindices, fr=0.4, to=0.7, len=30)
+    
+    internalStd standardises fluorescence measurements of any gain and machine in units of WT fluorescence.
+    By doing so, fluorescence is expressed in units of the change of fluorescence stat in the wt.
+    Why this is important:
+    The relative fluorescence measurements can change dramatically among machine and gain. This standardisation
+    brings all measurements to the same scale (the rate of change of fl in the wt).
+    It does so by:
+        a) calculating the rate of change of fluorescence channel stat between OD=fr and OD=to in the wells wtindices,
+        which should correspond to an untagged strain (if possible in a standard control medium). 
+        Higher values of 'to' ensure a more precise, convergent regression.
+        b) the standard fluorescence is obtained by subtracting the intercept and dividing by the slope of the regression
+        in all wells. 
+    rawdata- a rawdata dictionary where rawdata[stat] is a m wells x n timepoints dataframe for the given stat.
+    stat- the fluorescence measurement label of interest, such as 'GFP80'
+    wtindices- the indices in the rawdata[stat] matrix that correspond to the reference condition, normally the untagged strain 
+    in a standard medium.
+    fr, to- the initial and final OD in the wt for which to calculate the rate of change in stat. can be altered o fit the 
+    actual growth values of the experiment. 0.4 and 0.7 work great for BY4741 in 2% glucose and sucrose.
+    '''
+    vals=np.zeros([np.size(wtindices),len]) #prepopulating a matrix
+    xvals=np.matlib.repmat(np.linspace(fr, to, len), np.size(vals, 0),1)  # prepopulating x values for such matrix   
+    for d in range(0, size(wtindices)):
+        func= interp1d(rawdata['OD'].iloc[wtindices[d],: ].values, rawdata[stat].iloc[wtindices[d],: ].values)
+        vals[d, :]=func(linspace(fr, to, len))
+    reg=scipy.stats.linregress(xvals.flatten(),vals.flatten())
+    transformeddata= (rawdata[stat]-reg.intercept)/reg.slope
+    return reg, transformeddata
+
 def DFTransform(df, targetVariable, groupVariable, group, scale=1, shift=0):
     df2=df
     a=df
@@ -286,14 +320,79 @@ def extractTS(df, media, strain, tstype='FLperODTS'):
     b=df['media']==media
     out=df[a & b][tstype].values
     #out=df[a & b][tstype].values[0].split()
-    
-    
     return( out)
+def getRawData(expt):
+    xl= pd.ExcelFile(expt.wdir + expt.name+'.xlsx')
+    df= xl.parse(expt.dsheetnumber)
+    dlabels= df[df.columns[0]].values ##get column names
+    itime= np.nonzero(dlabels == 'Time [s]')[0] ##indices of the time vectors for each datatype, which are a good reference for upcoming data entries
+    #itime + 0 is time. -1 is cycle number. +1 is temperature. +2 is the first well whose label is found at df.ix[itime[i]+2][0]
+    #there is a one row blank between tables of different measurements.
+    #last well from previous measurement type  df.ix[itime[i]-4][0]
+    #blank df.ix[itime[i]-3][0]
+    #measurement type df.ix[itime[i]-2][0]
+    #cycle number df.ix[itime[i]-1][0]
+    #time df.ix[itime[i]][0]
+    #temperature df.ix[itime[i]+1][0]
+    #first well df.ix[itime[i]+2][0]
+    timepoints=df.ix[itime[0]][1:].dropna().values.astype('float')/3600 #
+    datastarts= itime+2
+    dataends= itime -4
+    matrixrows= dataends[1]-datastarts[0]+1 ###the end of the first matrix is 4 indices above the next time vector
+    rawdata={} 
+    for i in itime:
+        d= i+2
+        #rawdata[df.ix[i-2][0]]=pd.DataFrame(df.ix[d:d+matrixrows-1, 1:1+np.size(timepoints)], index=df.ix[d:d+matrixrows-1,0], columns=timepoints) #getting rid of incomplete timepoints
+        dt=df.ix[i-2][0] ##the datatype
+        actualdata=df.ix[d:d+matrixrows-1, 1:1+np.size(timepoints)].values #measurements
+        welllabels=df.ix[d:d+matrixrows-1, 0] #first column is invariably the well labels.
+        timelabels=[str(d) for d in range(0,np.size(timepoints))]
+        #we choose the timepoints vector because it is recorded on the go so it tells you how many timepoints you have actually recorded.
+        #number of cycles gets fully set from the beginning of the expt so it is not trustworthy.
+        #we replace the overflow value with nans.
+        rawdata[dt]=pd.DataFrame(data=actualdata, index=welllabels,columns=timelabels).replace('OVER', value=NaN) 
+    return rawdata
+def preprocessExpt(expt, wtindices, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' ):
+    '''
+    preprocessExpt(expt, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' )
+    preprocess data in excel sheet and output a filenamepreprocesed.xls
+    '''
+    rawdata=getRawData(expt)
+    stat1='GFP60'
+    stat2='GFP80'
+    stat3='AutoFL'
+    #indices of the main channel which are not nans
+    if fillnans==True:
+        notnans=np.isnan(rawdata[stat1])==False
+        #fitting a regression between the not nan values of the supporting (lower) measurement and the main measurement
+        reg=scipy.stats.linregress(rawdata[stat1].values[notnans].flatten(),rawdata[stat2].values[notnans].flatten())
+        ln=np.linspace(0, np.nanmax(rawdata[stat1]), 300)
+        ln2=np.linspace(0, np.nanmax(rawdata[stat1]), 300)*reg.slope+reg.intercept
+        if plot==True:
+            plt.scatter(rawdata[stat1],rawdata[stat2])
+            plt.xlabel(stat1)
+            plt.ylabel(stat2)
+            plt.plot(ln, ln2, color='red')
+            plt.legend([ 'y='+str(reg.slope)+'x'+stringSign(reg.intercept)+str(reg.intercept)])
+        #fixing the nans in stat2 by applying a regression from values in stat 1
+        substitution=rawdata[stat1][np.isnan(rawdata[stat2])]*reg.slope+reg.intercept     
+        rawdata[stat2][np.isnan(substitution)==False]=substitution[np.isnan(substitution)==False]
+    #performing the transformation based on WT fluorescence
+    tdata={}
+    tdata['OD']=rawdata['OD']
+    reg1, tdata[stat1]=internalStd(rawdata, stat1, wtindices, fr=0.4, to=normOD)
+    reg2, tdata[stat2]=internalStd(rawdata, stat2, wtindices, fr=0.4, to=normOD)
+    reg3, tdata[stat3]=internalStd(rawdata, stat3, wtindices, fr=0.4, to=normOD)
+    #### trying to create a new excel file with the new preprocessed data
+    df2=df #create a copy of the original data
+    for i in itime:
+        d= i+2
+        #rawdata[df.ix[i-2][0]]=pd.DataFrame(df.ix[d:d+matrixrows-1, 1:1+np.size(timepoints)], index=df.ix[d:d+matrixrows-1,0], columns=timepoints) #getting rid of incomplete timepoints
+        dt=df.ix[i-2][0] ##the datatype
+        df2.ix[d:d+matrixrows-1, 1:1+np.size(timepoints)]=tdata[dt].values #measurements
+    ##now that we have got the raw data we can apply functions to the matrices directly
+    df2.to_excel(expt.name+extension, header=True, index=False)
     
-    
-    
-
-
 class accesspr:	
     '''
     accesspr version 4.62(the number matches with that of the compatible platereader software version)
@@ -345,7 +444,7 @@ class accesspr:
     To interrogate about experiment contents and keep track of experiment processing,
     
         * getAllContents(self):
-             produces self.allContents attribute (see attributes)
+             produces self.allConditions attribute (see attributes)
              
         * containsstat(self, STAT):
             produces the statContents attribute (see attributes)
@@ -579,34 +678,26 @@ class accesspr:
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
         '''
         self.prtype='Tecan'
+        #source is a directory with several pickle files. if no pickles are found, then it tries to find experiments.
+        self.source = source
+        self.ignoreFiles=ignoreFiles
+        self.onlyFiles=onlyFiles
+        self.analyseFL=analyseFL
+        self.encoding=encoding
+        #exptInfo contains the source of each experiment, whether it is a pickle or just raw pr data
+        self.exptInfo={}
         self.data = {}
         self.experimentDuration={}
-        self.source = source
+        #activeExperiments is an array the list of currently relevant pickle files meant to be loaded onto memory.
+        #this list is modified by contains functions
+        self.activeExpts=[];
         self.version='4.6'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
-       #print "The given path exists: ";#print path.exists(self.source)
-       #print "The given path is a directory: ";#print path.isdir(self.source)
-        if path.exists(self.source) and path.isdir(self.source):
-            dirs = os.listdir(self.source)
-            for entry in dirs:
-                if entry.endswith('.pkl') and (ignoreFiles == False or ((entry in ignoreFiles)==False)) and (onlyFiles==False or entry in onlyFiles) :
-                    print('trying to open ', entry)
-                    pkl = open(self.source + '/' + entry, 'rb')
-                    self.data[entry] = pickle.load(pkl,encoding= encoding)
-                    pkl.close()
-                    self.experimentDuration[entry]=self.data[entry].t[-1]                
-        elif path.exists(self.source) and self.source.endswith('.pkl'):
-            filename = self.source.split('/')[-1]
-            pkl = open(self.source, 'rb')
-            if onlyFiles!=False:
-                if filename in onlyFiles:
-                    self.data[filename] = pickle.load(pkl, encoding= encoding)
-            else:
-                self.data[filename] = pickle.load(pkl, encoding= encoding)
-            pkl.close()
-            self.experimentDuration[filename]=self.data[filename].t[-1]
-        self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
+        self.allConditions=pd.DataFrame()
+        self.loadInitial()
+        #self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
         #this stores the absolute duration (in hrs) of the shortest experiment
+        self.defaultStats=['gr','GFP','c-GFPperod', 'GFP100','c-GFP100perod','GFP90','c-GFP90perod','GFP80','c-GFP80perod','GFP70', 'c-GFP70perod','GFP60', 'c-GFP60perod','GFP50', 'c-GFP50perod']
         self.extractionFields=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC','InitialRawFL','InitialFLperOD','FinalFLperOD','FLPeak','FLAbsPeakTime','FLAlignedPeakTime','FLperodAUC','slope','responseTime','steepness','responseTimeAligned']
         self.extractionFieldsOD=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC']
         self.mediaValue={'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2, 'SucGlu 1%': 0.5, 'SucGlu 1.8% 0.2%': 0.2/2, 'SucGlu 0.2% 1.8%': 1.8/2}
@@ -618,34 +709,26 @@ class accesspr:
         self.exptColors=False  ##### list of colours to be assigned to each media during plotting routines. currently not in use.
         self.aligned=False
         self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.statContents=pd.DataFrame(columns=['FLperod', 'gr'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
+        self.statContents=pd.DataFrame( index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
         self.wildTypeList=['WT', '77.WT', '229.WT']
         self.machines={}
         self.serialnumbers={}
+        ##This stores the normalisation factor for each experiment.
+        self.normalizationFactor={}
+        #this provides the conditions to obtain the normaliation factor. the channel, and the od for which the normalizing factor is obtained
+        self.normStandard={}
+        self.normStandard['channel']='AutoFL'
+        self.normStandard['OD']=0.4 
+        #self.getNormFactor()
         try:
             self.getAllContents()
         except:
             print('Impossible to get  allContents list for all experiments.')
         self.refstrains=dict()
+        self.checkAllStats()
         if analyseFL==True:
             self.analyseFL=True
             self.FL={}
-            self.containsstat('gr', printstats=False)
-            self.containsstat('GFP', printstats=False)
-            self.containsstat('c-GFPperod', printstats=False)
-            self.containsstat('GFP100', printstats=False)
-            self.containsstat('c-GFP100perod', printstats=False)
-            self.containsstat('GFP90', printstats=False)
-            self.containsstat('c-GFP90perod', printstats=False)
-            self.containsstat('GFP80', printstats=False)
-            self.containsstat('c-GFP80perod', printstats=False)
-            self.containsstat('GFP70', printstats=False)
-            self.containsstat('c-GFP70perod', printstats=False)
-            self.containsstat('GFP60', printstats=False)
-            self.containsstat('c-GFP60perod', printstats=False)
-            self.containsstat('GFP50', printstats=False)
-            self.containsstat('c-GFP50perod', printstats=False)
-            #self.containsstat('FLperod', printstats=False)
             self.consensusFLs=[]
             self.consensusFL=[]
             self.consensusFLperod=[]
@@ -662,9 +745,147 @@ class accesspr:
             self.alignAll(rerun=True)
         except:
             print('Problem aligning experiments, possibly owing to missing growth rate. Consider running .getstats()')
-            
         self.findMachines()
         self.replicateLocations()
+    def checkAllStats(self):
+        self.statContents=pd.DataFrame( index= list(self.data.keys()))
+        for k in self.defaultStats:
+            self.containsstat(k, printstats=False)
+            #self.containsstat('GFP', printstats=False)
+            #self.containsstat('c-GFPperod', printstats=False)
+            #self.containsstat('GFP100', printstats=False)
+            #self.containsstat('c-GFP100perod', printstats=False)
+            #self.containsstat('GFP90', printstats=False)
+            #self.containsstat('c-GFP90perod', printstats=False)
+            #self.containsstat('GFP80', printstats=False)
+            #self.containsstat('c-GFP80perod', printstats=False)
+            #self.containsstat('GFP70', printstats=False)
+            #self.containsstat('c-GFP70perod', printstats=False)
+            #self.containsstat('GFP60', printstats=False)
+            #self.containsstat('c-GFP60perod', printstats=False)
+            #self.containsstat('GFP50', printstats=False)
+            #self.containsstat('c-GFP50perod', printstats=False)
+            #self.containsstat('FLperod', printstats=False)
+    def getNormFactor(self):
+        #if self.allExperiments != self.activeExpts:
+        #    self.loadFresh()
+        for expt in self.allExperiments:
+            for m in self.data[expt].allconditions:
+                #this is the wildtype in this experiment
+                s=[j in self.wildTypeList for j in self.data[expt].allstrains]
+                wt=str(np.array(self.data[expt].allstrains)[np.where(s)][0])
+                print(wt)
+                print(str(np.array(self.data[expt].allstrains)[np.where(s)][0]))
+                try:
+                    mmin=np.min(self.data[expt].d[m][wt]['ODmn']-self.normStandard['OD'])
+                    ind=np.where((self.data[expt].d[m][wt]['ODmn']-self.normStandard['OD'])==mmin)
+                except:
+                    print('couldn''t get to normalise in '+str(m)+' '+str(wt))
+                self.normalizationFactor[expt]=np.mean(self.data[expt].d[m][wt][self.normStandard['channel']][ind, :])
+    def loadInitial(self):
+        '''
+        Search for files in the source path. the pr files can be either:
+        1. pickles created with the pickle library
+        2. folders, each containing two excel datasheets: a) data file and b)contents file (characterised by ending in contents.xls or contents.xlsx
+        '''
+        if path.exists(self.source) and path.isdir(self.source):
+            dirs = os.listdir(self.source)
+            for entry in dirs:
+                print('trying to import '+entry)
+                if entry.endswith('.pkl') and (ignoreFiles == False or ((entry in ignoreFiles)==False)) and (onlyFiles==False or entry in onlyFiles) :
+                    pkl = open(self.source + '/' + entry, 'rb')
+                    self.data[entry] = pickle.load(pkl,encoding= encoding)
+                    self.exptInfo[entry]= {}
+                    self.exptInfo[entry]['type']='pickle'
+                    self.exptInfo[entry]['datapath']=self.data[entry].name+'.xlsx'
+                    try:
+                        self.exptInfo[entry]['contentspath']=self.data[entry].aname
+                    except:
+                        print('failed to find a contents file name')
+                    self.activeExpts.append(entry)
+                    pkl.close()
+                    self.experimentDuration[entry]=self.data[entry].t[-1]
+        ##if the path its                
+                elif path.exists(self.source) and os.path.isdir(self.source+'/'+entry) and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles):
+                    #this generally means that the path is a directory. we look inside to see if there are any excel files that look like pr files.
+                    datafile=[]
+                    contentsfile=[]
+                    pth=self.source+'/'+entry; #store the full path of the directory.
+                    #look for 
+                    files=os.listdir(pth)
+                    hasExcel=0;
+                    for f in files:
+                        if f.endswith('.xls') or f.endswith('.xlsx'):
+                            hasExcel+=1;
+                            if f.endswith('contents.xls') or f.endswith('contents.xlsx'):
+                                contentsfile=self.source+'/'+entry+'/'+f
+                            else:
+                                datafile=self.source+'/'+entry+'/'+f
+                        if hasExcel>=2:
+                            print('directory with excel files will be incorporated.')
+                            #the folder may contain more than one experiments and the name of the experiment may differ from
+                            #that of the folder. therefore we use the experiment filename as a unifying reference
+                            if contentsfile and datafile:
+                                #creating pr file from scratch
+                                p=pr.platereader(datafile, contentsfile)
+                                exptname=p.name.split('/')[-1]
+                                self.data[exptname]=p 
+                                print('successfully loaded a platereader experiment '+exptname)
+                                self.activeExpts.append(exptname)
+                                self.exptInfo[exptname]= {}
+                                self.exptInfo[exptname]['type']='datasheet'
+                                self.exptInfo[exptname]['datapath']=self.data[exptname].name+'.xlsx'
+                                self.exptInfo[exptname]['contentspath']=self.data[exptname].aname
+                                self.experimentDuration[exptname]=self.data[exptname].t[-1]
+        #pickle.dump(self.data, open('xpr_startingdata.pkl', 'wb'))
+        #pickle.dump(self, open('xprBackup.pkl', 'wb'))
+    def preprocessAll(self, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx'):
+        '''
+        preprocessExpt(expt, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' )
+        preprocess all experiments to fix problems in measurement and normalize data
+        '''
+        for exp in self.allExperiments:
+            preprocessData(self.data[exp], fillnans=fillnans, standardize=standardize, mapFL=mapFL, normOD=normOD, extension=extension)
+    def stageData():
+        ##future: add way to verify that data changes have been made
+        pickle.dump(self.data, open('xpr_datastage'+str(self.currentStage+1).zfill(2)+'.pkl', 'wb'))
+        self.currentStage=self.currentStage+1
+        #used to save the data processing at different stages so that processing can be reversed at any point
+    def loadPickles(self, exptList=[]):
+        '''
+        loadExpts(exptList=self.activeExpts)
+        bring out experiments in exptList to the workspace. this function is to become medular in order to not saturate
+        the memory of the computer. whenever not in use, the experiments will be removed from memory
+        '''
+        if not exptList:
+            exptList=self.activeExpts
+        #clearing up previously loaded data.
+        self.data={}
+        #from pickle.
+        for entry in exptList:
+            if entry.endswith('.pkl') and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) :
+                print('trying to open ', entry)
+                try:
+                    pkl = open(self.source + '/' + entry, 'rb')
+                    self.data[entry] = pickle.load(pkl,encoding= encoding)
+                except:
+                    pkl.close()
+    def loadFresh(self, exptList=[]):
+        '''
+        loadFresh(exptList=self.activeExpts)
+        load experiments fresh from the original files.
+        '''
+        if not exptList:
+            exptList=self.activeExpts
+        #clearing up previously loaded data.
+        self.data={}
+        self.checkAllStats()
+        #from pickle.
+        for entry in exptList:
+            #making sure the entry is not in ignorefiles or is in onlyfiles
+            #if (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) :
+            print('trying to open ', entry, 'from the information in exptInfo')
+            self.data[entry] = pr.platereader(self.exptInfo[entry]['datapath'],self.exptInfo[entry]['contentspath'])
     def findMachines(self):
         for expt in self.allExperiments:
             try:
@@ -831,8 +1052,8 @@ class accesspr:
             #print( cl)
             percentage=0
             for x in range(0, np.size(cl, 0)):
-                media=cl.values[x,0]
-                strain=cl.values[x,1]
+                media=cl.values[x,1]
+                strain=cl.values[x,2]
                 if ppf.hasKey(self.data[key].d[media][strain], stat):
                     percentage=percentage+ 1/np.size(cl, 0)
                     #print(percentage)
@@ -841,10 +1062,10 @@ class accesspr:
                         print(self.statContents)
     #def backup(self):
     #    '''generates numbered backup pickles to backtrack processing in case something fails'''
-    #def resetFL(self):
-    #    '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
-    #    for expt in xpr.allExperiments:
-    #        xpr.data[expt].reset()
+    def resetFL(self):
+        '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
+        for expt in xpr.allExperiments:
+            xpr.data[expt].reset()
     def containssetup(self, media, strain, verbose=False, strict=True, musthave='gr'):
         '''
         Creates a list of experiments that contain the specified conditions.
@@ -888,14 +1109,23 @@ class accesspr:
         return [sd[c] for c in np.where([strng in j for j in  self.allMedia])[0]]
     
     def getAllContents(self):
-        ''' retrieves a set of unique conditions in all experiments
+        '''
+        getAllContents(self)
+        creates two dataframes in the accesspr object:
+            self.allConditions.- a dataframe of unique media/strain conditions in all experiments (useful for looping through all conditions once)
+            self.allContents.- a dataframe containing reating experiment, media, strain and plate locations of each condition.
+            This object is useful when you want to only consider or merge certain wells or biological replicates 
         '''
         cl= pd.DataFrame()
+        rl=pd.DataFrame() #dataframe of the replicates
         for key in self.data.keys():
             #print(cl)
             cl= pd.concat([cl, ppf.conditionList(self.data[key])], ignore_index=True)
-        cl=cl.drop_duplicates()
-        self.allContents= pd.DataFrame(np.column_stack([cl.values[:,0], cl.values[:,1]]), columns=['media', 'strain'])
+            rl= pd.concat([rl, ppf.replicateList(self.data[key])], ignore_index=True)
+        self.allReplicates=rl
+        self.allContents=cl
+        self.allConditions= pd.DataFrame(np.column_stack([cl.values[:,1], cl.values[:,2]]), columns=['media', 'strain'])
+        self.allConditions=self.allConditions.drop_duplicates()
 
     def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True, mediausemean=False, ignoreneg=True):
         ''' function designed to run correctauto on all experiments, or combinations of media and strains. 
@@ -934,7 +1164,7 @@ class accesspr:
         if experiments=='all':
             experiments=list(self.data.keys())
         for key in experiments:
-            cl=ppf.conditionList(self.data[key], excludeNull=True)
+            cl=self.allContents[self.allContents['experiment']==key][['media','strain']]
             for j in range(0, np.size(cl,0)):
                 #try:
                 #print(j)
@@ -987,7 +1217,7 @@ class accesspr:
         '''
         if exptColors==0:
             exptColors= colorDict(keys=xpr.allExperiments)
-        cl= ac.DFsubset(xpr.allContents, 'strain', ['null'])
+        cl= ac.DFsubset(self.allConditions, 'strain', ['null'])
         cl=cl.reset_index(drop=True)
         for j in range(0, np.size(cl, 0)):
             md=cl.loc[j, 'media']
@@ -995,11 +1225,11 @@ class accesspr:
             xpr.containssetup(cl.loc[j, 'media'], cl.loc[j, 'strain'], strict=False)
             expts=xpr.containslist
         for expt in expts:
-            plt.scatter(xpr.data[expt].d[md][st]['OD'], xpr.data[expt].d[md][st][xpr.FL[expt]['mainFL']], color=exptColors[expt])
+            plt.scatter(self.data[expt].d[md][st]['OD'], self.data[expt].d[md][st][self.FL[expt]['mainFL']], color=exptColors[expt])
         plt.xlabel('OD of null')
         plt.ylabel('FL of null')
         createFigLegend(dic=exptColors)
-    def getstats(self, experiments='all', media='all', strain='all', dtype=['OD'], rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5):
+    def getstats(self, experiments='all', media='all', strain='all', dtype='OD', rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
         statistical analysis have run odstats().
@@ -1014,23 +1244,20 @@ class accesspr:
         if type(experiments)==str and experiments != 'all':
             experiments=[experiments]
         for key in experiments: 
-            if self.statContents.loc[key, 'gr']==1 and dtype==['OD'] and rerun==False:
+            if self.statContents.loc[key, 'gr']==1 and dtype=='OD' and rerun==False:
                 print('Experiment ', key, ' already contains gr')
                 continue
             #if self.statContents.loc[key, 'd/dt FLperod']==1 and dtype==['FLperod'] and rerun==False:
             #   print('Experiment ', key, ' already contains d/dt FLperod')
             #   continue
-            for d in range(0, np.size(dtype)):
-                cl=ppf.conditionList(self.data[key]).values
-                for x in range(0, np.size(cl,0)):
-                    if dtype[d]=='FLperod' and ('WT' in cl[x,1] or 'null' in cl[x,1]):
-                        continue
-                    else:
-                        try:
-                            self.data[key].getstats(cl[x,0], cl[x,1], dtype= dtype[d], esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr)
-                            plt.close('all')
-                        except:
-                            print('something went wrong. carrying on.')
+            cl=ppf.conditionList(self.data[key])[['media', 'strain']].values
+            for x in range(0, np.size(cl,0)):
+                if dtype=='FLperod' and ('WT' in cl[x,1] or 'null' in cl[x,1]):
+                    continue
+                else:
+                        self.data[key].getstats(dtype, conditions=cl[x,0], strains=cl[x,1], esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr)
+                        plt.close('all')
+                        #print('something went wrong. carrying on.')
             if rewrite==True:
                 if path.isdir(self.source):
                     pickle.dump(self.data[key], open(self.source + '/' +key, 'wb'))
@@ -1087,7 +1314,7 @@ class accesspr:
         if self.aligned==False or rerun==True:
             for expt in list(self.data.keys()):
                 print('aligning experiment ', expt)
-                cl=ppf.conditionList(self.data[expt])
+                cl=ppf.conditionList(self.data[expt])[['media', 'strain']]
                 #print(cl)
                 media= cl.values[:,0]
                 strains= cl.values[:,1]
@@ -1108,7 +1335,97 @@ class accesspr:
                 self.aligned=False
                 print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
-
+    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time'):
+        '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
+        if experiments=='all':
+            experiments=self.allExperiments
+        else:
+            if isinstance(experiments, str):
+                experiments=[experiments]
+        if isinstance(ignoreExps, list):
+            [experiments.remove(j) for j in ignoreExps]
+        if isinstance(media, str):
+            media=[media]
+        if isinstance(strain, str):
+            strain=[strain]
+        if dtype=='':
+            try:
+                dtype=self.consensusFLperod
+            except:
+                dtype='OD'
+        if np.size(media)==1:
+            mediaName=media
+            media=[media]
+        cv=[]
+        flag=0
+        if media and strain: #we 
+            for m in media:
+                for s in strain:
+                    conditionsDF=DFsubset(DFsubset(DFsubset(self.allReplicates, 'media', [m]), 'strain', s), 'experiment', experiments)
+                    #print('processing '+m)
+                    interpolated= self.interpTimesNew(self, conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
+                    interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
+                    interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
+                    if normalise==True:
+                        interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
+                    mn=np.nanmean(interpolated[dtype],1)
+                    sd=np.nanstd(interpolated[dtype],1)
+                    #calculating the coefficient of variation
+                    cv.append(np.nanmean(sd/mn))
+                    ##generate bootstrap replicates
+                    ncols=np.size(interpolated[dtype], 1)
+                    nrows=np.size(interpolated[dtype], 0)
+                    reps=mn#np.nans(nrows)#create a dummy column for the bootstraps
+                    ###generating new traces  from combining other traces
+                    for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
+                        ###sample a number of replicates
+                        addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                        reps=np.column_stack([reps, addmn])
+                    if bootstrap>0:
+                        totalmn=np.nanmean(reps,1)
+                        totalsd=np.nanstd(reps,1)
+                        plt.plot(interpolated[centeringVariable], totalmn, color=col)
+                        plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
+                        plt.xlabel(centeringVariable)
+                        plt.ylabel(dtype)
+                    else:
+                        plt.plot(interpolated[centeringVariable], mn, color=col)
+                        plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
+                        plt.xlabel(centeringVariable)
+                        plt.ylabel(dtype)
+                    return cv
+        if isinstance(conditionsDF, pd.DataFrame): #if the conditions matrix is 
+            interpolated= interpTimesNew(self, conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
+            interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
+            interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
+            if normalise==True:
+                interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
+            mn=np.nanmean(interpolated[dtype],1)
+            sd=np.nanstd(interpolated[dtype],1)
+            #calculating the coefficient of variation
+            cv.append(np.nanmean(sd/mn))
+            ##generate bootstrap replicates
+            ncols=np.size(interpolated[dtype], 1)
+            nrows=np.size(interpolated[dtype], 0)
+            reps=mn#np.nans(nrows)#create a dummy column for the bootstraps
+            ###generating new traces  from combining other traces
+            for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
+                ###sample a number of replicates
+                addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                reps=np.column_stack([reps, addmn])
+            if bootstrap>0:
+                totalmn=np.nanmean(reps,1)
+                totalsd=np.nanstd(reps,1)
+                plt.plot(interpolated[centeringVariable], totalmn, color=col)
+                plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha)
+                plt.xlabel(centeringVariable)
+                plt.ylabel(dtype)
+            else:
+                plt.plot(interpolated[centeringVariable], mn, color=col)
+                plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha )
+                plt.xlabel(centeringVariable)
+                plt.ylabel(dtype)
+            return cv
     def plotReplicateMean(self, media, strain, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
@@ -1155,6 +1472,7 @@ class accesspr:
                 ###then get their mean
                 ###then add it to the column         
         return cv
+
     def getMediaValues(self, df=None):
         mediaValue=[]
         if df is None:
@@ -1213,7 +1531,6 @@ class accesspr:
         experiments in one plot, colouring all of them the same way, allowing to normalize or cnter at fluorescence
         If aligned=True, the data are plotted against the aligned time vector.
         '''
-        
         self.alignAll()
         self.containssetup(media, strain)
         self.media = media
@@ -1273,17 +1590,24 @@ class accesspr:
                 else: continue
         plt.show(block=False)
 
-    def plotRawReplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, experiments='all', exptColors=False, addLegend=True):
+    def plotRawReplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, experiments='all', exptColors=False, addLegend=True, xstat=[], color=False):
         self.containssetup(media, strain, strict=False)
         if exptColors==False:
-            exptColors=dict(zip(self.containslist, ppf.randomColors(np.size(self.containslist))))
+            if color:
+                exptColors= ppf.colorDict(keys= self.allExperiments, colors= color* np.size(self.allExperiments))
+            else:
+                exptColors=dict(zip(self.containslist, ppf.randomColors(np.size(self.containslist))))
         patches=[]
         for x in self.containslist:
             if experiments!='all' and (x in experiments)==False:
                 continue
             patches.append(pch.Patch(color=exptColors[x]))
             arr=self.data[x].d[media][strain][dtype]
-            plt.plot(self.data[x].t, arr, color= exptColors[x])
+            if not xstat:
+                arrx=self.data[x].t
+            else:
+                arrx=self.data[x].d[media][strain][xstat]
+            plt.plot(arrx, arr, color= exptColors[x])
         if addLegend==True:
             plt.figlegend(patches, self.containslist, 'upper right')
         plt.title('Replicates of '+strain+ ' in '+media)
@@ -1328,16 +1652,16 @@ class accesspr:
                 mx= np.max(maxdf['FinalOD'])
         else:
             mx=False
-        for j in range(0, np.size(self.allContents,0)):
-            if self.allContents.values[j,1]=='null':
+        for j in range(0, np.size(self.allConditions,0)):
+            if self.allConditions.values[j,1]=='null':
                 continue
             try:
                 if aligned==True:
-                    df=pd.concat([df, self.timeStatAligned(self.allContents.values[j,0],self.allContents.values[j,1], times, dtype=dtype)])
+                    df=pd.concat([df, self.timeStatAligned(self.allConditions.values[j,0],self.allConditions.values[j,1], times, dtype=dtype)])
                 if aligned==False:
-                        df=pd.concat([df, self.timeStat(self.allContents.values[j,0],self.allContents.values[j,1], times, dtype=dtype, scale=scale, max=mx)])
+                        df=pd.concat([df, self.timeStat(self.allConditions.values[j,0],self.allConditions.values[j,1], times, dtype=dtype, scale=scale, max=mx)])
             except:
-                print('condition ', self.allContents.values[j,1], ' in ' ,self.allContents.values[j,0], 'showed extraction problems.')
+                print('condition ', self.allConditions.values[j,1], ' in ' ,self.allConditions.values[j,0], 'showed extraction problems.')
         df.index= range(0,np.size(df,0))
         if media !='all': #if media subset is entered then filter dataframe by that subset
             df=DFsubset(df, 'media', media)
@@ -1391,14 +1715,15 @@ class accesspr:
         return fin
         
     def replicateLocations(self):
-        daf=pd.DataFrame(index=[self.allContents['strain'], self.allContents['media']], columns=self.allExperiments)
-        daf=daf.fillna(0)
-        for j in daf.index:
-            self.containssetup(media=j[1], strain=j[0], strict=False)
-            for c in self.containslist:
-                daf.loc[j, c]=1 
-        self.conditionLocTable=daf
-        self.numReplicates=daf.sum(1)
+        if not self.allConditions.empty:
+            daf=pd.DataFrame(index=[self.allConditions['strain'], self.allConditions['media']], columns=self.allExperiments)
+            daf=daf.fillna(0)
+            for j in daf.index:
+                self.containssetup(media=j[1], strain=j[0], strict=False)
+                for c in self.containslist:
+                    daf.loc[j, c]=1 
+            self.conditionLocTable=daf
+            self.numReplicates=daf.sum(1)
         
     def text2d(self, media=False, strains=False, dimx='FinalOD', dimy='maxGR', strainColors=False, xlim=False, ylim=False, markersize=500, newFig=True):
         if newFig==True:
@@ -1407,22 +1732,27 @@ class accesspr:
         legs=[]
         plt.xlabel(dimx); plt.ylabel(dimy)
         if strains==False:
-            strains=np.unique(list(self.allContents['strain'].values))
+            strains=np.unique(list(self.allConditions['strain'].values))
         if strainColors==False:
-            strainColors= dict(zip( self.allContents['strain'].values, ppf.randomColors(np.size(self.allContents['strain'].values))))
+            strainColors= dict(zip( self.allConditions['strain'].values, ppf.randomColors(np.size(self.allConditions['strain'].values))))
         print(strainColors)
         for strain in  strains:
             print('current strain is'+strain) 
             patches.append(pch.Patch(color= strainColors[strain]))
             legs.append(strain)
             if np.all(media==False):
-                media=self.allContents[self.allContents['strain']==strain]['media'].values
+                media=self.allConditions[self.allConditions['strain']==strain]['media'].values
             for m in media:
                  df=self.extractRepInfo(m, strain) 
                  plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
         plt.figlegend(patches, legs, 'upper right')
         return strainColors
-    def interpTimes(self, media, strain, dtype='FLperod', centeringVariable='time', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
+    def interpTimes(self, media, strain, dtype='OD', centeringVariable='time', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
+        '''
+        interpTimes(self, media, strain, dtype='FLperod', centeringVariable='time', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all')   
+        interpolate all replicates across the same time scale.
+        
+        '''
         self.containssetup(media, strain, strict=True, musthave=dtype)
         if experiments!='all':
             experimentList=experiments
@@ -1501,8 +1831,47 @@ class accesspr:
             #print('Error: interpolation time out of bounds. please screen for time discrepancies')
  
         return finalDict
-        
-        
+    def interpTimesNew(self, replicateMatrix=False, dtype='OD', centeringVariable='time'):    
+        '''
+        interpTimes(self, media, strain, dtype='OD', centeringVariable='time')   
+        interpolate all replicates across the same time scale.
+        replicateMatrix is a matrix of the format of self.allReplicates with the specific replicates to interpolate
+        '''
+        interpRange=[]
+        maxLengths=[]
+        startPoints=[]
+        adjustedTimes=dict()
+        adjustedTimes[dtype]=[] #working with ordered lists
+        adjustedTimes[centeringVariable]=[] #working with ordered lists
+        for j in range(0, size(replicateMatrix, 0)): ###retireving the limiting values for the interpolation amongst all experiments.
+            expt, media, strain=replicateMatrix.values[j, [0,1,2]]
+            maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
+            startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
+        interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
+        func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
+        for j in range(0, size(replicateMatrix, 0)):
+            expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
+            #finding the points that fit the range
+            fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
+            #print(np.shape(self.data[expt].d[media][strain][dtype])[1])
+            #Index in the data matrix that corresponds to this specific well
+            platelocIndex=np.where([plateloc==k for k in self.data[expt].d[media][strain]['plateloc']])[0][0]
+            if not(dtype.endswith('mn')) and not(dtype.endswith('gr')) and not(dtype.endswith('perod')) and not(dtype.endswith('var')):
+                adjustedTimes[dtype].append(self.data[expt].d[media][strain][dtype][fitPoints, platelocIndex])
+            else:
+                adjustedTimes[dtype].append(self.data[expt].d[media][strain][dtype][fitPoints])
+            adjustedTimes[centeringVariable].append(np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2))
+        finalDict={};
+        finalDict[dtype]=np.empty([np.size(adjustedTimes[centeringVariable][0]), len(adjustedTimes[dtype])], dtype=None)
+        finalDict[centeringVariable]=np.around(adjustedTimes[centeringVariable][0],2) #arbitrarily taking the times of the first condition as a reference
+        for j in range(0, len(adjustedTimes[dtype])): 
+            try:
+                fint=scint.interp1d(adjustedTimes[centeringVariable][j],adjustedTimes[dtype][j]) #interpolate times j and response j
+                finalDict[dtype][:, j]=fint(finalDict[centeringVariable])
+            except:
+                finalDict[dtype][:, j]=np.empty([size(finalDict[centeringVariable],0)])*np.nan
+        return finalDict
+
     def addLegend(self, strains=False, media=False, strainColors=False, mediaColors=False):
         patches=[]
         legends=[]
@@ -1666,14 +2035,14 @@ class accesspr:
             
         df=pd.DataFrame(columns=extflds)
         self.getAllContents()
-        for x in range(0, np.size(self.allContents,0)):
-            if self.allContents.values[x,1]=='null' and excludeNull==True:
+        for x in range(0, np.size(self.allConditions,0)):
+            if self.allConditions.values[x,1]=='null' and excludeNull==True:
                 continue
             #try:
-            out=self.extractRepInfo(self.allContents.values[x,0], self.allContents.values[x,1], strict=strict)
+            out=self.extractRepInfo(self.allConditions.values[x,0], self.allConditions.values[x,1], strict=strict)
             df=df.append(out, ignore_index=True)
             #except:
-            #    print('Problem extracting '+ self.allContents.values[x,1]+ ' in '+self.allContents.values[x,0])
+            #    print('Problem extracting '+ self.allConditions.values[x,1]+ ' in '+self.allConditions.values[x,0])
             #    continue
             #print ' begin df:', df, "end df\n"
         df= self.getMediaValues(df)

@@ -1,5 +1,7 @@
 import numpy as np
-
+import string
+from string import ascii_uppercase
+import pandas as pd
 #####
 def isfloat(s):
     '''
@@ -504,7 +506,6 @@ def prContents(media=False, strains=False, filename='contents.xls', numStrains=F
 	-
 		
 	'''
-	from string import ascii_uppercase
 	alphabet=list(string.ascii_uppercase)
 	
 	##in case no strains are added
@@ -529,8 +530,8 @@ def prContents(media=False, strains=False, filename='contents.xls', numStrains=F
 		numMedia=len(media)
 		numStrains=len(strains)
 	
-	strainTemplate=numpy.matlib.repmat(np.concatenate([numpy.matlib.repmat(j, 1, int(12/numStrains)) for j in strains], axis=1), 8,1)
-	mediaTemplate=numpy.matlib.repmat(np.concatenate([numpy.matlib.repmat(j, int(8/numMedia),1) for j in media], axis=0),1, 12)
+	strainTemplate=np.matlib.repmat(np.concatenate([np.matlib.repmat(j, 1, int(12/numStrains)) for j in strains], axis=1), 8,1)
+	mediaTemplate=np.matlib.repmat(np.concatenate([np.matlib.repmat(j, int(8/numMedia),1) for j in media], axis=0),1, 12)
 	
 	#if the idea is to swaps strains to rows and media to column, we have to swap media and strains and also the order in which the sentence
 	# is made. 
@@ -543,8 +544,8 @@ def prContents(media=False, strains=False, filename='contents.xls', numStrains=F
 	##makeSentence is an atomic function to put strain and media together
 	makeSentence=lambda x,y: x+' in '+y
 
-	totSpace=30 ##we fill a receiver array with 25 blank spaces because any string longer than this will be trimmed off. shorter seems fine
-	arr=numpy.matlib.repmat(' '*totSpace, 8,12) 
+	totSpace=40 ##we fill a receiver array with 25 blank spaces because any string longer than this will be trimmed off. shorter seems fine
+	arr=np.matlib.repmat(' '*totSpace, 8,12) 
 	for j in range(0,8):
 		for k in range(0, 12):
 			arr[j,k]= makeSentence(strainTemplate[j,k], mediaTemplate[j, k])
