@@ -791,19 +791,21 @@ class accesspr:
             dirs = os.listdir(self.source)
             for entry in dirs:
                 print('trying to import '+entry)
-                if entry.endswith('.pkl') and (ignoreFiles == False or ((entry in ignoreFiles)==False)) and (onlyFiles==False or entry in onlyFiles) :
+                if entry.endswith('.pkl') and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) :
                     pkl = open(self.source + '/' + entry, 'rb')
-                    self.data[entry] = pickle.load(pkl,encoding= encoding)
-                    self.exptInfo[entry]= {}
-                    self.exptInfo[entry]['type']='pickle'
-                    self.exptInfo[entry]['datapath']=self.data[entry].name+'.xlsx'
+                    p=pickle.load(pkl,encoding= self.encoding)
+                    exptname=p.name.split('/')[-1]
+                    self.data[exptname] = p
+                    self.exptInfo[exptname]= {}
+                    self.exptInfo[exptname]['type']='pickle'
+                    self.exptInfo[exptname]['datapath']=self.data[exptname].name+'.xlsx'
                     try:
-                        self.exptInfo[entry]['contentspath']=self.data[entry].aname
+                        self.exptInfo[exptname]['contentspath']=self.data[exptname].aname
                     except:
                         print('failed to find a contents file name')
-                    self.activeExpts.append(entry)
+                    self.activeExpts.append(exptname)
                     pkl.close()
-                    self.experimentDuration[entry]=self.data[entry].t[-1]
+                    self.experimentDuration[exptname]=self.data[exptname].t[-1]
         ##if the path its                
                 elif path.exists(self.source) and os.path.isdir(self.source+'/'+entry) and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles):
                     #this generally means that the path is a directory. we look inside to see if there are any excel files that look like pr files.
@@ -1322,7 +1324,7 @@ class accesspr:
                         continue ###this is to be replaced by the use of raw fluorescence
                     else:
                         #print('aligning media '+media[x]+';strain: '+strains[x])
-                        self.plot(media[x], strains[x], alignFL=alignFL)
+                        plt.plot(media[x], strains[x], alignFL=alignFL)
             self.containsstat('gr')
             self.containsstat('Time centered at gr peak')
             self.containsstat('Time centered at FL peak')
@@ -1334,7 +1336,7 @@ class accesspr:
                 self.aligned=False
                 print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
-    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time'):
+    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if experiments=='all':
             experiments=self.allExperiments
@@ -1362,7 +1364,7 @@ class accesspr:
                 for s in strain:
                     conditionsDF=DFsubset(DFsubset(DFsubset(self.allReplicates, 'media', [m]), 'strain', s), 'experiment', experiments)
                     #print('processing '+m)
-                    interpolated= self.interpTimesNew(self, conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
+                    interpolated= self.interpTimesNew(replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
                     interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
                     interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
                     if normalise==True:
@@ -1394,7 +1396,7 @@ class accesspr:
                         plt.ylabel(dtype)
                     return cv
         if isinstance(conditionsDF, pd.DataFrame): #if the conditions matrix is 
-            interpolated= interpTimesNew(self, conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
+            interpolated= self.interpTimesNew( replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
             interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
             if normalise==True:
@@ -1828,7 +1830,6 @@ class accesspr:
                 finalDict[centeringVariable]=temptime
             #except ValueError:
             #print('Error: interpolation time out of bounds. please screen for time discrepancies')
- 
         return finalDict
     def interpTimesNew(self, replicateMatrix=False, dtype='OD', centeringVariable='time'):    
         '''
@@ -1842,13 +1843,13 @@ class accesspr:
         adjustedTimes=dict()
         adjustedTimes[dtype]=[] #working with ordered lists
         adjustedTimes[centeringVariable]=[] #working with ordered lists
-        for j in range(0, size(replicateMatrix, 0)): ###retireving the limiting values for the interpolation amongst all experiments.
+        for j in range(0, np.size(replicateMatrix, 0)): ###retireving the limiting values for the interpolation amongst all experiments.
             expt, media, strain=replicateMatrix.values[j, [0,1,2]]
             maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
             startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
         interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
         func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
-        for j in range(0, size(replicateMatrix, 0)):
+        for j in range(0, np.size(replicateMatrix, 0)):
             expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
             #finding the points that fit the range
             fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
@@ -1868,7 +1869,7 @@ class accesspr:
                 fint=scint.interp1d(adjustedTimes[centeringVariable][j],adjustedTimes[dtype][j]) #interpolate times j and response j
                 finalDict[dtype][:, j]=fint(finalDict[centeringVariable])
             except:
-                finalDict[dtype][:, j]=np.empty([size(finalDict[centeringVariable],0)])*np.nan
+                finalDict[dtype][:, j]=np.empty([np.size(finalDict[centeringVariable],0)])*np.nan
         return finalDict
 
     def addLegend(self, strains=False, media=False, strainColors=False, mediaColors=False):
