@@ -1389,12 +1389,13 @@ class accesspr:
                         plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
                         plt.xlabel(centeringVariable)
                         plt.ylabel(dtype)
+                        interpolated[dtype]=reps
                     else:
                         plt.plot(interpolated[centeringVariable], mn, color=col)
                         plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
                         plt.xlabel(centeringVariable)
                         plt.ylabel(dtype)
-                    return cv
+                    return cv, interpolated
         if isinstance(conditionsDF, pd.DataFrame): #if the conditions matrix is 
             interpolated= self.interpTimesNew( replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
