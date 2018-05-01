@@ -1320,15 +1320,19 @@ class accesspr:
                 media= cl.values[:,0]
                 strains= cl.values[:,1]
                 for x in range(0, np.size(cl.values, 0)):
-                    if strains[x] in self.wildTypeList or strains[x]=='null':
+                    if strains[x]=='null':
                         continue ###this is to be replaced by the use of raw fluorescence
-                        #else:
+                    else:
+                        self.align(media[x], strains[x], alignFL=alignFL)
                         #print('aligning media '+media[x]+';strain: '+strains[x])
                         #plt.plot(media[x], strains[x], alignFL=alignFL)
             self.containsstat('gr')
             self.containsstat('Time centered at gr peak')
             self.containsstat('Time centered at FL peak')
-            grAlignedFraction=self.statContents['Time centered at gr peak'].sum()/ np.size(self.statContents['Time centered at gr peak'])
+            if 'Time centered at gr peak' in list(self.statContents.columns.values):
+                grAlignedFraction=self.statContents['Time centered at gr peak'].sum()/ np.size(self.statContents['Time centered at gr peak'])
+            else:
+                grAlignedFraction=0
             if grAlignedFraction==1:
                 self.aligned=True
                 print('Experiments aligned successfully.')
@@ -1338,6 +1342,12 @@ class accesspr:
             print('Experiments have already been aligned. to realign, try rerun=True')
     def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
+        if centeringVariable=='Time centered at gr peak':
+            print('removing null from strain list as it does not have growth rate')
+            if isinstance(strain, list):
+                strain.remove('null')
+            if isinstance(conditionsDF, pd.DataFrame):
+                conditionsDF= conditionsDF[conditionsDF['strain'].values != 'null']
         if experiments=='all':
             experiments=self.allExperiments
         else:
@@ -1395,7 +1405,7 @@ class accesspr:
                         plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
                         plt.xlabel(centeringVariable)
                         plt.ylabel(dtype)
-                    return cv, interpolated
+                    return interpolated
         if isinstance(conditionsDF, pd.DataFrame): #if the conditions matrix is 
             interpolated= self.interpTimesNew( replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
@@ -1427,7 +1437,7 @@ class accesspr:
                 plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha )
                 plt.xlabel(centeringVariable)
                 plt.ylabel(dtype)
-            return cv
+            return interpolated
     def plotReplicateMean(self, media, strain, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
