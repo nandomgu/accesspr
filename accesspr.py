@@ -1322,9 +1322,9 @@ class accesspr:
                 for x in range(0, np.size(cl.values, 0)):
                     if strains[x] in self.wildTypeList or strains[x]=='null':
                         continue ###this is to be replaced by the use of raw fluorescence
-                    else:
+                        #else:
                         #print('aligning media '+media[x]+';strain: '+strains[x])
-                        plt.plot(media[x], strains[x], alignFL=alignFL)
+                        #plt.plot(media[x], strains[x], alignFL=alignFL)
             self.containsstat('gr')
             self.containsstat('Time centered at gr peak')
             self.containsstat('Time centered at FL peak')
