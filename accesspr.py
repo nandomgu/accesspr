@@ -1304,6 +1304,46 @@ class accesspr:
                         self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
             self.data[key].d[media][strain]['Time centered at gr peak'] = alignedTimeGR
 
+    def alignNew(self, conditions=[], alignFL=False):
+        '''
+        In the current version 'plotalign(self,media,strain,type)' sets the time vector <t0,...,tn> 
+        to zero at t.where(data == max).
+        In other words, the time vector is shifted to the left.
+        A new key 'taligned' containing the aligned time vector is created for each experiment 
+        that contains the requested setup.
+        '''
+        if not(conditions):
+            conditions=self.allContents
+        for j in range(0, np.size(xpr.allContents,0)+1):
+            expt, media, strain, plateloc= xpr.allContents.values[j] 
+            flag=0
+            if strain== 'null':
+                alignedTimeGR=np.nan
+                alignedTimeFL=np.nan
+            else:
+                centeredTimeGR=self.data[key].t[np.where(self.data[key].d[media][strain]['gr']==max(self.data[key].d[media][strain]['gr']))]
+                alignedTimeGR=self.data[key].t-centeredTimeGR
+                if alignFL==True:
+                    mainFL=self.FL[key]['mainFL']
+                    mainFLperod=self.FL[key]['mainFLperod']
+                    try:
+                        centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFLperod]==max(self.data[key].d[media][strain][mainFLperod]))]
+                    except KeyError:
+                        try:
+                            print('Warning: experiment '+key+' does not contain corrected '+mainFLperod+'. Attempting to use raw '+mainFL+' peak') 
+                            centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+'mn']==max(self.data[key].d[media][strain][mainFL+'mn']))]
+                        except:
+                            print('Fluorescence peak failed to be found. setting centered FL time to NaN')
+                            #centeredTimeFL=np.nan #np.matlib.repmat(np.nan,np.size(xpr.data[key].t,0),1).reshape((np.size(xpr.data[key].t,0),))
+                            flag=1
+                    if flag==1:
+                        alignedTimeFL=np.matlib.repmat(np.nan,np.size(self.data[key].t,0),1).reshape((np.size(self.data[key].t,0),))
+                        self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
+                    else:
+                        alignedTimeFL=self.data[key].t-centeredTimeFL
+                        self.data[key].d[media][strain]['Time centered at FL peak'] = alignedTimeFL
+            self.data[key].d[media][strain]['Time centered at gr peak'] = alignedTimeGR
+
     def alignAll(self, rerun=False, alignFL=False):
         '''
         In the current version 'plotalign(self,media,strain,type)' sets the time vector <t0,...,tn> 
@@ -1386,12 +1426,13 @@ class accesspr:
                     ##generate bootstrap replicates
                     ncols=np.size(interpolated[dtype], 1)
                     nrows=np.size(interpolated[dtype], 0)
-                    reps=mn#np.nans(nrows)#create a dummy column for the bootstraps
-                    ###generating new traces  from combining other traces
                     for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
                         ###sample a number of replicates
-                        addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                        reps=np.column_stack([reps, addmn])
+                        if j==0:
+                            reps=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                        if j>0:
+                            addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                            reps=np.column_stack([reps, addmn])
                     if bootstrap>0:
                         totalmn=np.nanmean(reps,1)
                         totalsd=np.nanstd(reps,1)
@@ -1419,12 +1460,14 @@ class accesspr:
             ##generate bootstrap replicates
             ncols=np.size(interpolated[dtype], 1)
             nrows=np.size(interpolated[dtype], 0)
-            reps=mn#np.nans(nrows)#create a dummy column for the bootstraps
             ###generating new traces  from combining other traces
             for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
                 ###sample a number of replicates
-                addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                reps=np.column_stack([reps, addmn])
+                if j==0:
+                    reps=np.nanmean(interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))], 1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                if j>0:
+                    addmn=np.nanmean(interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))], 1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+                    reps=np.column_stack([reps, addmn])
             if bootstrap>0:
                 totalmn=np.nanmean(reps,1)
                 totalsd=np.nanstd(reps,1)
@@ -1432,6 +1475,7 @@ class accesspr:
                 plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha)
                 plt.xlabel(centeringVariable)
                 plt.ylabel(dtype)
+                interpolated[dtype]=reps
             else:
                 plt.plot(interpolated[centeringVariable], mn, color=col)
                 plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha )
@@ -1908,6 +1952,12 @@ class accesspr:
         #first we take the real time point indices that do not exceed the upper limit, which is in hours. say, if indices 161-200 are above, then you consider 1-160
         #then we interpolate the timepoints
         
+    def extractAllInfoNew(self, replicates, onlyGrowth=False):
+        #creating an empty dataframe
+        df=pd.DataFrame(index= self.allReplicates.index, columns=self.extractionFields)
+        for j in range(0, size(self.allReplicates,0)+1):
+            expt, media, strain, plateloc= self.allReplicates.values[j]
+            ##Pending: generate modular extraction functions depending on expt, media, strain, plateloc
     def extractRepInfo(self, media, strain, strict=True, onlyGrowth=False):
         '''
         generates a table of basic info for all replicates
@@ -1978,9 +2028,9 @@ class accesspr:
                     strainlist.append(strain)
                     grAUC.append(ppf.statArea(self.data[containslist[i]], media, strain, 'gr'))
                     if self.analyseFL:
-                        out=alignStats(self.data[containslist[i]], media, strain, dtype=nflod)
                         nflod=self.FL[containslist[i]]['mainFLperod']
                         nfl=self.FL[containslist[i]]['mainFL']
+                        out=alignStats(self.data[containslist[i]], media, strain, dtype=nflod)
                         print('nfl= '+nflod)
                         InitialFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][0])
                         FinalFLperOD.append(self.data[containslist[i]].d[media][strain][nflod][np.size(self.data[containslist[i]].d[media][strain][nflod])-1])
