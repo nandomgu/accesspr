@@ -12,6 +12,7 @@ import prPlottingFunctions as ppf
 from random import choice, randint, sample
 import statsmodels.stats.api as sms
 from matplotlib.colors import hex2color
+import colors
 #from decimal import *
 #getcontext().prec = 3
 
@@ -201,7 +202,7 @@ def fadeColor(color, fadeIntensity=0.5):
     return fadedColor
 
 def fitsBounds(x, bounds):
-    if x> bounds[0] and x< bounds[1]:
+    if x>= bounds[0] and x<= bounds[1]:
         return True
     else:
         return False
@@ -392,7 +393,55 @@ def preprocessExpt(expt, wtindices, fillnans=True, standardize=True, mapFL=True,
         df2.ix[d:d+matrixrows-1, 1:1+np.size(timepoints)]=tdata[dt].values #measurements
     ##now that we have got the raw data we can apply functions to the matrices directly
     df2.to_excel(expt.name+extension, header=True, index=False)
-    
+
+def bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col='black', alpha=0.15):
+    '''
+    bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col='black', alpha=0.15)
+        creates bootstrap replicates from timeseriesxreplicate matrix obj[dtype], and plots the mean and std deviation of these replicates.
+        it samples random numbers of columns n=bootstrap times, calculates the mean of those replicates and piles up such 
+        means into a bootstrap mean matrix B of len(obj[centeringVariable]) timepoints x n bootstrapmeans
+        if bootstrap==0, then it plots the mean and sd of the replicates.
+        output: 
+            dictionary final with fields
+                dtype= B, matrix of timepoints x bootstrapmeans
+                centeringVariable= x variable (of interpolated x values for all replciates) used in plotting, gotten from obj.
+    '''
+    mn=np.nanmean(obj[dtype],1)
+    sd=np.nanstd(obj[dtype],1)
+    #calculating the coefficient of variation
+    ##generate bootstrap replicates
+    ncols=np.size(obj[dtype], 1)
+    nrows=np.size(obj[dtype], 0)
+    ###generating new traces  from combining other traces
+    final={}
+    final[centeringVariable]=obj[centeringVariable]
+    for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
+        ###sample a number of replicates
+        if j==0:
+            reps=np.nanmean(obj[dtype][:, sample(range(0,ncols),randint(1,ncols))], 1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+        if j>0:
+            addmn=np.nanmean(obj[dtype][:, sample(range(0,ncols),randint(1,ncols))], 1)  ###sample from one to ncols -1 , and get those specific replicates from the set
+            reps=np.column_stack([reps, addmn])
+    if bootstrap>0:
+        totalmn=np.nanmean(reps,1)
+        totalsd=np.nanstd(reps,1)
+        plt.plot(obj[centeringVariable], totalmn, color=col)
+        plt.fill_between(obj[centeringVariable], totalmn-totalsd, totalmn+totalsd, color=col, alpha=alpha)
+        plt.xlabel(centeringVariable)
+        plt.ylabel(dtype)
+        final[dtype]=reps
+        final[dtype+'mn']=totalmn
+        final[dtype+'bootstrapsd']=totalsd
+    else:
+        final[dtype]=interpolated[dtype]
+        final[dtype+'mn']=mn
+        final[dtype+'sd']=sd
+        plt.plot(obj[centeringVariable], mn, color=col)
+        plt.fill_between(obj[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha )
+        plt.xlabel(centeringVariable)
+        plt.ylabel(dtype)
+    return final
+
 class accesspr:	
     '''
     accesspr version 4.62(the number matches with that of the compatible platereader software version)
@@ -1380,7 +1429,7 @@ class accesspr:
                 self.aligned=False
                 print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
-    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time'):
+    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if centeringVariable=='Time centered at gr peak':
             print('removing null from strain list as it does not have growth rate')
@@ -1418,70 +1467,48 @@ class accesspr:
                     interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
                     interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
                     if normalise==True:
-                        interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
-                    mn=np.nanmean(interpolated[dtype],1)
-                    sd=np.nanstd(interpolated[dtype],1)
-                    #calculating the coefficient of variation
-                    cv.append(np.nanmean(sd/mn))
-                    ##generate bootstrap replicates
-                    ncols=np.size(interpolated[dtype], 1)
-                    nrows=np.size(interpolated[dtype], 0)
-                    for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
-                        ###sample a number of replicates
-                        if j==0:
-                            reps=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                        if j>0:
-                            addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                            reps=np.column_stack([reps, addmn])
-                    if bootstrap>0:
-                        totalmn=np.nanmean(reps,1)
-                        totalsd=np.nanstd(reps,1)
-                        plt.plot(interpolated[centeringVariable], totalmn, color=col)
-                        plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
-                        plt.xlabel(centeringVariable)
-                        plt.ylabel(dtype)
-                        interpolated[dtype]=reps
-                    else:
-                        plt.plot(interpolated[centeringVariable], mn, color=col)
-                        plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
-                        plt.xlabel(centeringVariable)
-                        plt.ylabel(dtype)
-                    return interpolated
+                        interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype]))
+                    interpolatedFinal=bootstrapInterps(interpolated, centeringVariable, dtype, bootstrap=bootstrap, col=col, alpha=alpha)
+                    return(interpolatedFinal) 
         if isinstance(conditionsDF, pd.DataFrame): #if the conditions matrix is 
             interpolated= self.interpTimesNew( replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
             interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
             if normalise==True:
                 interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
-            mn=np.nanmean(interpolated[dtype],1)
-            sd=np.nanstd(interpolated[dtype],1)
-            #calculating the coefficient of variation
-            cv.append(np.nanmean(sd/mn))
-            ##generate bootstrap replicates
-            ncols=np.size(interpolated[dtype], 1)
-            nrows=np.size(interpolated[dtype], 0)
-            ###generating new traces  from combining other traces
-            for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
-                ###sample a number of replicates
-                if j==0:
-                    reps=np.nanmean(interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))], 1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                if j>0:
-                    addmn=np.nanmean(interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))], 1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                    reps=np.column_stack([reps, addmn])
-            if bootstrap>0:
-                totalmn=np.nanmean(reps,1)
-                totalsd=np.nanstd(reps,1)
-                plt.plot(interpolated[centeringVariable], totalmn, color=col)
-                plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha)
-                plt.xlabel(centeringVariable)
-                plt.ylabel(dtype)
-                interpolated[dtype]=reps
+            if isinstance(factor, str): 
+            ### This if block interpolates of full set of conditions together, but are plotted by group based on variable factor. Lucia Bandiera 20180501
+                createdColorsFlag=0
+                for i_fact,fact in enumerate(conditionsDF[factor].unique()):# iterate over the factor levels
+                    print(fact)
+                    i_DF = conditionsDF.index[conditionsDF[factor]== fact].get_values() # find the indexes of the dataframe in which the factor level occurs
+                    i_interpolatedCols = [conditionsDF.index.get_loc(i_e) for i_e in i_DF] # find the corresponding position in the data frame (equals the number of columns in interpolate)
+                    print(i_interpolatedCols)
+                    interpolatedToUse={}
+                    interpolatedToUse[dtype] = interpolated[dtype][:,i_interpolatedCols]
+                    interpolatedToUse[centeringVariable]=interpolated[centeringVariable]
+                    #final object here is a dictionary for each factor in order to obtain separate means and sds for each
+                    if not(isinstance(factorColors, dict)): #if the dictionary never existed we create it but remember we did with the flag
+                        factorColors={}
+                        createdColorsFlag=0
+                    else:
+                        createdColorsFlag=1
+                    if createdColorsFlag==0 or ppf.hasKey(factorColors,fact)==False:
+                        #if there is no factorColors or if the argument does not contain a color for the given factor we make one
+                        factorColors[fact]=colors.strongColors[i_fact] 
+                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha)
+                    interpolated['Group_'+fact+'_'+dtype+'mn']=interpolatedFinal[dtype+'mn']
+                    if bootstrap>0:
+                        st=dtype+'bootstrapsd'
+                    else:
+                        st=dtype+'sd'
+                    interpolated['Group_'+fact+'_'+st]=interpolatedFinal[st]
+                ppf.createFigLegend(dic=factorColors) #creating a legend for the figure
+                return(interpolated, factorColors) 
             else:
-                plt.plot(interpolated[centeringVariable], mn, color=col)
-                plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha )
-                plt.xlabel(centeringVariable)
-                plt.ylabel(dtype)
-            return interpolated
+                    #interpolated final contains the mean and sd that were plotted
+                    interpolatedFinal=bootstrapInterps(interpolated, centeringVariable, dtype, bootstrap=bootstrap, col=col, alpha=alpha)
+                    return(interpolatedFinal)
     def plotReplicateMean(self, media, strain, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if dtype=='':
