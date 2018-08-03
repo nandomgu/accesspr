@@ -9,6 +9,7 @@ from scipy.interpolate import interp1d
 import scipy
 import seaborn as sns
 from numpy.matlib import repmat
+from colormap import rgb2hex
 import matplotlib
 
 ###PLATE READER PLOTTING FUNCTIONS VERSION 3.1.0.
@@ -95,7 +96,7 @@ def alignTime(p, media, strain, FL='c-GFPperod', centerAtPeakFL=0):
 	#out= {'alignedTime': alignedTimeVector , 'rawFL':rawFLVector ,'normalizedFL':normalizedFLVector , 'peakFL':peak,  'peakTime':peakTime, 'gr':p.d[media][strain]['gr']}
 	alignedTimeVector=p.t-centeredTime
 	out=alignedTimeVector
-	return out
+	return out, centeredTime
 
 def symmetricMap(poslimit, nbins=10, extendBy=False):
     ''' 
@@ -125,9 +126,10 @@ def robustCorrect(p, f=['GFP', 'AutoFL'], refstrain='WT'):
         except LinAlgError:
             continue
 
-def colorDict(keys, colors=0):
-    if colors==0:
+def colorDict(keys, colors=[]):
+    if not colors:
         colors= randomColors(np.size(keys))
+    
     return dict(zip(keys, colors))
     
 def transformStat(p, stat, scale, shift, genericLabel=True, excludeNull=False):
@@ -245,19 +247,6 @@ def normalizeOverTime(p, media, strain, subtractBg=0):
     noBgFLVector=p.d[media][strain][normalflperodName]-min(p.d[media][strain][normalflperodName])
     normalizedFLVector=(noBgFLVector-np.mean(noBgFLVector))/np.std(noBgFLVector)
     return normalizedFLVector
-	
-def alignStats(p, media, strain, dtype, subtractBg=0):
-    rawFLVector=p.d[media][strain][dtype]
-    noBgFLVector=p.d[media][strain][dtype]-np.nanmin(p.d[media][strain][dtype])
-    normalizedFLVector=(noBgFLVector-np.nanmean(noBgFLVector))/np.nanstd(noBgFLVector)
-    normalizedFLPeak=max(normalizedFLVector)
-    alignedTimeVector=alignTime(p,media,strain)
-    alignedPeakTime=alignedTimeVector[np.where(normalizedFLVector==np.nanmax(normalizedFLVector))]
-    absolutePeakTime=p.t[np.where(rawFLVector==np.nanmax(rawFLVector))]
-    out= {'rawFL': rawFLVector, 'normalizedFL': normalizedFLVector, 'FLPeak': max(rawFLVector), 'normalizedFLPeak':normalizedFLPeak, 'alignedPeakTime':alignedPeakTime, 'absolutePeakTime':absolutePeakTime}
-    return out
-
-    
 def plotalign(p, media, strain, col='black', normalize=1, centerAtPeakFL=0):
 	"aligns fitted curves for given strains respective to normalized peak or maximum growth rate. this is a standalone function to plot."
 	# time t where growth rate is max for given curve
@@ -570,8 +559,9 @@ def plotByODAllMedia(p, stat, strain, medialist, mediaColors, normalizeToSelf=0,
         
         
 def statArea(p,media, strain, stat):##make sure it is a time series
-    return np.trapz(p.d[media][strain][stat])
-    
+    try:
+        return np.trapz(p.d[media][strain][stat])
+    except: return np.nan
 def plotByODAllMediaByStrain(p, stat, strains, medialist, mediaColors, normalizeToSelf=0, normalizeToExt=0, subtractBg=0, supress=1):
     for i in range(0, np.size(strains)):
         plotByODAllMedia(p, stat, strains[i], medialist, mediaColors, normalizeToSelf=0, normalizeToExt=0, subtractBg=0, supress=1)
@@ -1271,7 +1261,7 @@ def experimentOverview(p, dtype= 'OD', colormap='cool', colorMapRange=False, tim
     refaxis.get_yaxis().set_ticks( np.linspace(256,0, 6) )
     refaxis.set_yticklabels(np.linspace(colorMapRange[0], colorMapRange[1], 6))
     #plt.figlegend(patches, legends, 'upper left')
-    cl=conditionList(p)
+    cl=conditionList(p)[['media', 'strain']]
     problematicWells=[]
     for x in range(0, np.size(cl,0)):
         media=cl.values[x,0]
@@ -1287,17 +1277,20 @@ def experimentOverview(p, dtype= 'OD', colormap='cool', colorMapRange=False, tim
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].plot([1,2,3,4,5,6], [6,5,4,3,2,1], c='red')
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_xaxis().set_visible(False)
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_yaxis().set_visible(False)
+                axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].set_label(p.d[media][strain]['plateloc'][cc])
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].legend()
                 continue
             try:
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].scatter(p.t, p.d[media][strain][dtype][:,cc], c=p.d[media][strain][dtype][:,cc], cmap=colormap, vmin=colorMapRange[0], vmax=colorMapRange[1], edgecolor='None')
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_xaxis().set_visible(False)
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_yaxis().set_visible(False)
+                axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].set_label(p.d[media][strain]['plateloc'][cc])
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].legend()
             except IndexError:
                 #print('time length: ', np.size(p.t))
                 #print('vector length: ', np.size(p.d[media][strain][dtype],0))
                 print('Index error:  well ', p.d[media][strain]['plateloc'][cc], ', media ', media, ', strain ', strain)
+    return axarr
 
 def plateLocMap(p):
     strains=[]

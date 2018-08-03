@@ -554,6 +554,7 @@ def prContents(media=False, strains=False, filename='contents.xls', numStrains=F
 	contents=pd.DataFrame(arr, index=alphabet[0:8], columns=range(1, 13))
 	if excel==True:
 		contents.to_excel(filename)
+		print('Plate layout has been exported to file '+filename)
 	return contents
 
 
