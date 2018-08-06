@@ -29,8 +29,8 @@ class platereader:
     p.correctauto()
     p.plot('c-GFPperod', onefig= True)
     p.savefigs()
-    p.getstats('1% Gal', 'GAL2')
-    p.getstats('1% Gal', 'GAL2', dtype= 'FLperod')
+    p.getstats('OD', '1% Gal', 'GAL2')
+    p.getstats('FLperod', '1% Gal', 'GAL2')
 
     See also http://swainlab.bio.ed.ac.uk/software/platereader/platereader.html
 
@@ -52,9 +52,9 @@ class platereader:
     Pandas dataframes can be created to create new plots and to export to .xlsx or .csv file.
     For example,
 
-    p.makedateframe(['OD', 'GFP'], strains= ['WT'])
+    p.makedateframe('timecol', dfname= 'df')
     p.exportdataframe(ftype= 'csv')
-    p.rmdataframe()
+    p.rmdataframe(dfname= 'df')
 
     Bounds on the hyperparameters for all Gaussian processes can be specified. For example,
 
@@ -73,8 +73,9 @@ class platereader:
     '''
 
     #####
-    def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0, asheetnumber= 0,
-                 ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True, standardgain= False):
+    def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0,
+                 asheetnumber= 0, ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True,
+                 standardgain= False, ignorestrains= []):
         '''
         Requires a data file, fname, (.csv, .txt, .xls, or .xlsx). An annotation file, aname, giving the contents of each well is optional. The plate reader is assumed to be a Tecan machine (but alternatives can in principle be specified using the platereader argument). A working directory can be set using wdir, such as wdir= 'data/'.
 
@@ -90,16 +91,15 @@ class platereader:
         warn: if False (default), warnings created by covariance matrices that are not positive semi-definite are stopped
         info: if True (default), display information on the plate after loading
         standardgain: if defined, fluorescence measurements are corrected to this gain
+        ignorestrains: a list of strains in particular conditions to be ignored, such as ['GAL10 in 0.1% Gal']
         '''
-        self.version= '4.69'
+        self.version= '4.81'
         self.dsheetnumber= dsheetnumber
         self.asheetnumber= asheetnumber
         if '.' not in dname: dname += '.xlsx'
         # specify working directory
         self.wdir= wdir
         self.name= dname.split('.')[0]
-        self.fullname= dname
-
         self.ODfname= ODfname
 
         # general parameters
@@ -116,7 +116,9 @@ class platereader:
         self.autocorrected= {}
         self.mediacorrected= {}
         self.ignoredwells= []
+        self.ignored= []
         self.negativevalues= False
+        self.mediaGP= {}
 
         if not warn:
             # warning generated occasionally when sampling from the Gaussian process likely because of numerical errors
@@ -126,7 +128,6 @@ class platereader:
         print('Platereader', self.version, ': loading data')
         # define annotation
         if aname == 'default': aname= self.name + '_contents.xlsx'
-        self.aname=aname
         if aname:
             # import annotation
             try:
@@ -166,39 +167,43 @@ class platereader:
                         ells= alabel.split('in')
                         strain= ells[0].strip()
                         condition= 'in'.join(ells[1:]).strip()
-                        alldata.append(strain + ' in ' + condition)
-                        platelabels[plateloc]= strain + ' in ' + condition
-                        # get data
-                        id= np.nonzero(dlabels == plateloc)[0][idstartindex:]
-                        if np.any(id):
-                            dsub= np.empty((nodata, len(datatypes)))
-                            for jd in range(len(id)):
-                                dsub[:,jd]= np.transpose(df.ix[id[jd]][dstartindex:].dropna().values)
-                                # replace overflow values with NaN
-                                dsub[:,jd][dsub[:,jd] == self.overflow]= np.nan
-                            # add to data structure
-                            if condition not in S.keys():
-                                # new condition
-                                S[condition]= {}
-                                # record all conditions in data set
-                                if condition != 'media': allconditions.append(condition)
-                            if strain in S[condition].keys():
-                                # remember location on plate
-                                S[condition][strain]['plateloc'].append(plateloc)
-                                S[condition][strain]['originalplateloc'].append(plateloc)
-                                # add data to structure
-                                S[condition][strain]['data']= np.append(S[condition][strain]['data'],
-                                                                        dsub, axis= 1)
-                            else:
-                                # new strain
-                                S[condition][strain]= {'data' : dsub, 'plateloc' : [plateloc], 'time': t,
-                                                       'originalplateloc' : [plateloc]}
-                                # record all strains in data set
-                                if strain not in allstrains and strain != 'null':
-                                    allstrains.append(strain)
+                        sinc= strain + ' in ' + condition
+                        if sinc not in ignorestrains:
+                            alldata.append(sinc)
+                            platelabels[plateloc]= sinc
+                            # get data
+                            id= np.nonzero(dlabels == plateloc)[0][idstartindex:]
+                            if np.any(id):
+                                dsub= np.empty((nodata, len(datatypes)))
+                                for jd in range(len(id)):
+                                    dsub[:,jd]= np.transpose(df.ix[id[jd]][dstartindex:].dropna().values)
+                                    # replace overflow values with NaN
+                                    dsub[:,jd][dsub[:,jd] == self.overflow]= np.nan
+                                # add to data structure
+                                if condition not in S.keys():
+                                    # new condition
+                                    S[condition]= {}
+                                    # record all conditions in data set
+                                    if condition != 'media': allconditions.append(condition)
+                                if strain in S[condition].keys():
+                                    # remember location on plate
+                                    S[condition][strain]['plateloc'].append(plateloc)
+                                    S[condition][strain]['originalplateloc'].append(plateloc)
+                                    # add data to structure
+                                    S[condition][strain]['data']= np.append(S[condition][strain]['data'],
+                                                                            dsub, axis= 1)
+                                else:
+                                    # new strain
+                                    S[condition][strain]= {'data' : dsub, 'plateloc' : [plateloc], 'time': t,
+                                                           'originalplateloc' : [plateloc]}
+                                    # record all strains in data set
+                                    if strain not in allstrains and strain != 'null':
+                                        allstrains.append(strain)
 
+                            else:
+                                print('Data missing for well', plateloc)
                         else:
-                            print('Data missing for', plateloc)
+                            print('Ignoring', sinc, 'at well', plateloc)
                     else:
                         print('Ignoring', alabel, '(wrong notation)')
                 except TypeError:
@@ -209,6 +214,7 @@ class platereader:
         self.datatypes= datatypes
         self.gains= gains
         for dn in datatypes:
+            self.mediaGP[dn]= {}
             for c in allconditions:
                 self.mediacorrected[c + ' for ' + dn]= False
                 if dn not in ['OD', 'AutoFL']:
@@ -357,12 +363,20 @@ class platereader:
         for c in self.getconditions('all'):
             for s in self.getstrains('all', c):
                 for dn in self.datatypes:
-                    if S[c][s][dn].shape[1] > 1:
+                    if S[c][s][dn].size == 0:
+                        # all wells for a condition and strain have been ignored
+                        self.ignored.append(s + ' in ' + c)
+                    elif S[c][s][dn].shape[1] > 1:
                         S[c][s][dn + 'mn']= np.mean(S[c][s][dn], 1)
                         S[c][s][dn + 'var']= np.var(S[c][s][dn], 1)
                     else:
                         S[c][s][dn + 'mn']= gu.makerow(S[c][s][dn])
                         S[c][s][dn + 'var']= np.zeros(len(S[c][s][dn]))
+        if self.ignored:
+            self.ignored= list(np.unique(self.ignored))
+            for igns in self.ignored:
+                print('Warning: all wells for', igns, 'have been ignored')
+            raise(SystemExit('\nYou should reload the data specifying "ignorestrains" because all wells for a strain in a particular condition have been ignored.'))
 
 
     #####
@@ -398,7 +412,7 @@ class platereader:
 
 
     #####
-    def info(self, full= True):
+    def info(self, full= False):
         '''
         Displays conditions, strains, datatypes, and corrections made.
 
@@ -444,46 +458,110 @@ class platereader:
 
     def attributes(self):
         '''
-        Displays the names of the attributes available.
+        Displays the names of the attributes in the instance of platereader.
 
         Arguments
         --
         None
         '''
-        ignore= ['d', 'consist', 't', 'nosamples', 'gamma', 'ODfname', 'overflow', 'nooutchannels', 'nodata']
+        ignore= ['d', 'consist', 't', 'nosamples', 'gamma', 'ODfname', 'overflow', 'nooutchannels', 'nodata', '__doc__']
         for a in self.__dict__:
             if 'corrected' not in a and 'processed' not in a and a not in ignore: print(a)
 
+
+    #####
+    def datavariables(self, individual= False, conditions= 'all', strains= 'all',
+                      conditionincludes= False, strainincludes= False,
+                      conditionexcludes= False, strainexcludes= False,
+                      title= True, out= False):
+        '''
+        Returns the keys (the variables) calculated from the data for each strain.
+
+        Arguments
+        --
+        individual: if True, separately list the variables for each strain
+        conditions: list of experimental conditions to include (default is 'all')
+        strains: list of strains to include (default is 'all')
+        conditionincludes: selects only conditions with conditionincludes in their name
+        strainincludes: selects only strains with strainincludes in their name
+        conditionexcludes: ignore conditions with conditionexcludes in their name
+        strainexcludes: ignore strains with strainexcludes in their name
+        title: display condition and strain
+        out: if True, return the names of datavariables, timevariables, and othervariables
+        '''
+        S= self.d
+        ignore= ['data', 'originalplateloc']
+        if individual:
+            for c in self.getconditions(conditions, True, conditionincludes, conditionexcludes):
+                for s in self.getstrains(strains, c, True, strainincludes, strainexcludes):
+                    if title: print(s, 'in', c, '\n---')
+                    for k in sorted(list(S[c][s].keys())):
+                        if k not in ignore: print('\t'+k)
+        else:
+            datavariables= np.unique([var if var not in ignore else 'time'
+                                      for c, s in self.getconditionsandstrains(conditions,
+                                                                               strains,
+                                                                               conditionincludes,
+                                                                               strainincludes,
+                                                                               conditionexcludes,
+                                                                               strainexcludes,
+                                                                               True, True)
+                                      for var in S[c][s]])
+            timevariables= np.unique([var if isinstance(S[c][s][var], np.ndarray) and
+                                      S[c][s][var].shape[0] == S[c][s]['time'].shape[0]
+                                      and var not in ignore
+                                      else 'time'
+                                      for c, s in self.getconditionsandstrains(conditions,
+                                                                               strains,
+                                                                               conditionincludes,
+                                                                               strainincludes,
+                                                                               conditionexcludes,
+                                                                               strainexcludes,
+                                                                               True, True)
+                                      for var in S[c][s]])
+            othervariables= np.setdiff1d(datavariables, timevariables)
+            if out:
+                return datavariables, timevariables, othervariables
+            else:
+                for dv in datavariables: print('\t'+dv)
 
 
 
     #####
     # Internal functions
     #####
-    def getconditions(self, conditions= 'all', nomedia= False, includes= False, excludes= False):
+    def getconditions(self, conditions= 'all', nomedia= False, conditionincludes= False,
+                      conditionexcludes= False):
         '''
-        Internal function: Creates a list of conditions
+        Returns a list of conditions.
+
+        Arguments
+        --
+        conditions: list of experimental conditions to include (default is 'all')
+        nomedia: ignores condition= media if True (default)
+        conditionincludes: selects only conditions with conditionincludes in their name
+        conditionexcludes: ignore conditions with conditionexcludes in their name
         '''
-        if conditions == 'all' or includes or excludes:
+        if conditions == 'all' or conditionincludes or conditionexcludes:
             cons= list(self.d.keys())
             if nomedia and 'media' in cons:
                 cons.pop(cons.index('media'))
             # find those conditions containing keywords given in 'includes'
-            if includes:
-                includes= gu.makelist(includes)
+            if conditionincludes:
+                conditionincludes= gu.makelist(conditionincludes)
                 newcons= []
                 for condition in cons:
                     gotone= 0
-                    for item in includes:
+                    for item in conditionincludes:
                         if item in condition: gotone += 1
-                    if gotone == len(includes): newcons.append(condition)
+                    if gotone == len(conditionincludes): newcons.append(condition)
                 cons= newcons
             # remove any conditions containing keywords given in 'excludes'
-            if excludes:
-                excludes= gu.makelist(excludes)
+            if conditionexcludes:
+                conditionexcludes= gu.makelist(conditionexcludes)
                 exconds= []
                 for condition in cons:
-                    for item in excludes:
+                    for item in conditionexcludes:
                         if item in condition:
                             exconds.append(condition)
                             break
@@ -494,38 +572,47 @@ class platereader:
         if cons:
             return sorted(cons)
         else:
-            if includes:
-                raise(SystemExit('No conditions have ' + ' and '.join(includes)))
+            if conditionincludes:
+                raise(SystemExit('No conditions have ' + ' and '.join(conditionincludes)))
             else:
                 raise(SystemExit('No conditions found'))
 
 
 
     #####
-    def getstrains(self, strains, condition, nonull= False, includes= False, excludes= False):
+    def getstrains(self, strains, condition, nonull= False, strainincludes= False, strainexcludes= False):
         '''
-        Internal function: Creates a list of strains
+        Returns list of strains
+
+        Arguments
+        --
+        strains: list of strains to include (default is 'all')
+        condition: the experimental condition for which strains are required
+        nonull: ignores strain= null if True
+        strainincludes: selects only strains with strainincludes in their name
+        strainexcludes: ignore strains with strainexcludes in their name
         '''
-        if strains == 'all' or includes or excludes:
-            ss= list(self.d[condition].keys())
+        strainsincondition= list(self.d[condition].keys())
+        if strains == 'all' or strainincludes or strainexcludes:
+            ss= strainsincondition
             if nonull and 'null' in ss:
                 ss.pop(ss.index('null'))
             # find those strains containing keywords given in 'includes'
-            if includes:
-                includes= gu.makelist(includes)
+            if strainincludes:
+                strainincludes= gu.makelist(strainincludes)
                 newss= []
                 for strain in ss:
                     sc= 0
-                    for item in includes:
+                    for item in strainincludes:
                          if item in strain: sc += 1
-                    if sc == len(includes): newss.append(strain)
+                    if sc == len(strainincludes): newss.append(strain)
                 ss= newss
             # remove any strains containing keywords given in 'excludes'
-            if excludes:
-                excludes= gu.makelist(excludes)
+            if strainexcludes:
+                strainexcludes= gu.makelist(strainexcludes)
                 exsts= []
                 for strain in ss:
-                    for item in excludes:
+                    for item in strainexcludes:
                         if item in strain:
                             exsts.append(strain)
                             break
@@ -533,11 +620,14 @@ class platereader:
                     ss.pop(ss.index(ex))
         else:
             ss= gu.makelist(strains)
+            for s in ss:
+                if s not in strainsincondition:
+                    ss.pop(ss.index(s))
         if ss:
             return sorted(ss)
         else:
-            if includes:
-                print('Warning: No strains have ' + ' and '.join(includes) + ' for ' + condition)
+            if strainincludes:
+                print('Warning: No strains have ' + ' and '.join(strainincludes) + ' for ' + condition)
             else:
                 print('Warning: No strains found for ' + condition)
             return []
@@ -561,31 +651,12 @@ class platereader:
         nomedia: ignores condition= media if True (default)
         nonull: ignores strain= null if True (default)
         '''
-        return [(c,s) for c in self.getconditions(conditions, nomedia= nomedia, includes= conditionincludes, excludes= conditionexcludes)
-                for s in self.getstrains(strains, c, nonull= nonull, includes= strainincludes, excludes= strainexcludes)]
+        return [(c,s) for c in self.getconditions(conditions, nomedia= nomedia,
+                                                  conditionincludes= conditionincludes,
+                                                  conditionexcludes= conditionexcludes)
+                for s in self.getstrains(strains, c, nonull= nonull, strainincludes= strainincludes,
+                                         strainexcludes= strainexcludes)]
 
-
-    #####
-    def getkeys(self, conditions= 'all', strains= 'all', conditionincludes= False, strainincludes= False,
-             conditionexcludes= False, strainexcludes= False, title= True):
-        '''
-        Returns the keys (the items) calculated for each strain.
-
-        Arguments
-        --
-        conditions: list of experimental conditions to include (default is 'all')
-        strains: list of strains to include (default is 'all')
-        conditionincludes: selects only conditions with conditionincludes in their name
-        strainincludes: selects only strains with strainincludes in their name
-        conditionexcludes: ignore conditions with conditionexcludes in their name
-        strainexcludes: ignore strains with strainexcludes in their name
-        title: display condition and strain
-        '''
-        S= self.d
-        for c in self.getconditions(conditions, True, conditionincludes, conditionexcludes):
-            for s in self.getstrains(strains, c, True, strainincludes, strainexcludes):
-                if title: print(s, 'in', c, '\n---')
-                for k in sorted(list(S[c][s].keys())): print('\t'+k)
 
 
 
@@ -610,7 +681,8 @@ class platereader:
         '''
         if not self.ODcorrected:
             # correct for media
-            if correctmedia: self.correctmedia(datatypes= 'OD', conditionincludes= conditionincludes,
+            if correctmedia: self.correctmedia(datatypes= 'OD', figs= figs,
+                                               conditionincludes= conditionincludes,
                                                conditionexcludes= conditionexcludes)
             # if no ODfname use the default
             if not ODfname: ODfname= self.wdir + self.ODfname
@@ -665,8 +737,9 @@ class platereader:
     #####
     # Media correction
     #####
-    def correctmedia(self, datatypes= 'OD', conditions= 'all', figs= True, noruns= 3, exitearly= False, bd= False,
-                     results= False, conditionincludes= False, conditionexcludes= False, mean= False):
+    def correctmedia(self, datatypes= 'all', conditions= 'all', figs= True, noruns= 3, exitearly= False, bd= False,
+                     results= False, conditionincludes= False, conditionexcludes= False, mean= False,
+                     commonmedia= False):
         '''
         Corrects OD or fluorescence for the OD or fluorescence of the media. Uses a Gaussian process to fit the time-series of measurements of all replicates of the media and subtracts this time series from the raw data.
 
@@ -682,33 +755,37 @@ class platereader:
         conditionincludes: selects only conditions with conditionincludes in their name
         conditionexcludes: ignore conditions with conditionexcludes in their name
         mean: if True, the mean over time of the media values is used for the correction (rather than fitting with a Gaussian process)
+        commonmedia: condition containing a 'null' strain that is to be used to correct multiple other conditions
         '''
         S= self.d
         cons= self.getconditions(conditions, False, conditionincludes, conditionexcludes)
-        if 'media' in cons:
-            print('Wells should be labelled "null" for this version of the software')
-            print('Abandoning correction for media')
-            return
+        if datatypes == 'all': datatypes= self.datatypes
         datatypes= gu.makelist(datatypes)
         for dn in datatypes:
             # correct for media
             for c in cons:
-                if self.mediacorrected[c + ' for ' + dn]:
-                    print(dn, 'in', c, 'is already corrected for the media')
-                elif 'null' in S[c]:
-                    print('Correcting', dn, 'in', c, 'for media')
-                    self.performmediacorrection(dn, c, figs, noruns, exitearly, bd, results, mean)
-                    self.mediacorrected[c + ' for ' + dn]= True
-                else:
-                    print('No well annotated "null" was found')
-                    print('Correcting for media abandoned for', dn, 'in', c)
+                if c != 'media':
+                    if self.mediacorrected[c + ' for ' + dn]:
+                        print(dn, 'in', c, 'is already corrected for the media')
+                    elif commonmedia and 'null' in S[commonmedia]:
+                        print('Correcting', dn, 'in', c, 'for media')
+                        self.performmediacorrection(dn, c, figs, noruns, exitearly, bd, results, mean,
+                                                    commonmedia)
+                        self.mediacorrected[c + ' for ' + dn]= True
+                    elif 'null' in S[c] or ('media' in cons and 'null' in S['media']) :
+                        print('Correcting', dn, 'in', c, 'for media')
+                        self.performmediacorrection(dn, c, figs, noruns, exitearly, bd, results, mean, c)
+                        self.mediacorrected[c + ' for ' + dn]= True
+                    else:
+                        print('No well annotated "null" was found')
+                        print('Correcting for media abandoned for', dn, 'in', c)
         self.updatemeans()
         if self.negativevalues:
             print('Warning: correcting media has created negative values for')
             print(self.negativevalues)
 
     #####
-    def performmediacorrection(self, dtype, condition, figs, noruns, exitearly, bd, results, mean):
+    def performmediacorrection(self, dtype, condition, figs, noruns, exitearly, bd, results, mean, commonmedia):
         '''
         Internal function: Uses a Gaussian process to fit the media over time and subtracts the best-fit media values from the data, as well as storing the uncorrected data.
         '''
@@ -721,9 +798,15 @@ class platereader:
             # data avaliable to correct per condition: 'null in c'
             cons= condition
         # find correction to use (either for 'media' and so all conditions or just for specific condition)
-        t, data= S[condition]['null']['time'], S[condition]['null'][dtype]
+        if 'media' in self.getconditions():
+            t, data= S['media']['null']['time'], S['media']['null'][dtype]
+        else:
+            t, data= S[commonmedia]['null']['time'], S[commonmedia]['null'][dtype]
         if mean:
             f= np.mean(data)
+        elif commonmedia in self.mediaGP[dtype]:
+            # Gaussian process has already been fit
+            f, fvar= self.mediaGP[dtype][commonmedia].f, self.mediaGP[dtype][commonmedia].fvar
         else:
             # d is data and x is time
             d= data.flatten('F')
@@ -732,7 +815,8 @@ class platereader:
             if bd: b= gu.mergedicts(original= b, update= bd)
             # fit with Gaussian process
             try:
-                f, fvar= gu.smoothGP(x, d, xp= t, bd= b, results= results)
+                print('Fitting media for', dtype, 'in', commonmedia)
+                f, fvar, self.mediaGP[dtype][commonmedia]= gu.smoothGP(x, d, xp= t, bd= b, results= results)
                 if figs:
                     plt.figure()
                     plt.plot(x, d, 'ro', t, f, 'b-')
@@ -812,7 +896,7 @@ class platereader:
                               mean= mediausemean)
             if self.negativevalues:
                 print('There are negative values for fluorescence measurements')
-                print('Use\n\tignoreneg= True\nto force correction for autofluoresence')
+                print('Use\n\tignoreneg= True\nto force correction for autofluorescence')
                 print('Alternatively, specify one fluorescence measurement, such as:')
                 print("\tp.reset()\n\tp.correctauto('GFP', correctmedia= False)")
                 if ignoreneg:
@@ -1169,7 +1253,7 @@ class platereader:
     #####
     def plot(self, dtype= 'OD', conditions= 'all', strains= 'all', plate= False, onefig= False,
              plotod= True, nonull= False, conditionincludes= False, strainincludes= False,
-             conditionexcludes= False, strainexcludes= False, includeref= False):
+             conditionexcludes= False, strainexcludes= False, includeref= False, errors= False):
         '''
         Plots data for specified strains in specified conditions.
 
@@ -1193,6 +1277,7 @@ class platereader:
         conditionexcludes: ignore conditions with conditionexcludes in their name
         strainexcludes: ignore strains with strainexcludes in their name
         includeref: whether or not to include the reference strain in fluorescence plots
+        errors: if True, standard deviations over replicates are included for 'mn' dtypes
         '''
         S= self.d
         if dtype == 'labels':
@@ -1241,7 +1326,7 @@ class platereader:
                             # plot data
                             plt.plot(S[c][s]['time'], S[c][s][dtype][:,i], '-')
                             i += 1
-                        plt.tick_params(labelbottom= 'off', labelleft= 'off')
+                        plt.tick_params(labelbottom= False, labelleft= False)
                         # label well locations
                         for j in range(12):
                             if sindex == j+1: plt.title(j+1)
@@ -1271,9 +1356,7 @@ class platereader:
                         # plot raw data
                         if not onefig: plt.figure()
                         # remove ignored wells for the legend
-                        pls= list(S[c][s]['plateloc'])
-                        for igwell in self.ignoredwells:
-                            if igwell in pls: pls.remove(igwell)
+                        pls= [well for well in list(S[c][s]['plateloc']) if well not in self.ignoredwells]
                         # plot each replicate
                         if S[c][s][dtype].ndim > 1:
                             for i in range(S[c][s][dtype].shape[1]):
@@ -1284,19 +1367,24 @@ class platereader:
                                 plt.plot(S[c][s]['time'], S[c][s][dtype][:,i], '.-', label= label)
                         else:
                             plt.plot(S[c][s]['time'], S[c][s][dtype], '.-', label= s + ' in ' + c)
+                            if errors and 'mn' in dtype:
+                                sd= np.sqrt(S[c][s][dtype[:-2] + 'var'])
+                                plt.fill_between(S[c][s]['time'], S[c][s][dtype]-sd, S[c][s][dtype]+sd, facecolor= 'b',
+                                                 alpha= 0.2, label= '_nolegend_')
                 if not onefig and not ignorestrain:
                     # display and add labels for each plot
                     plt.title(dtype + ' of ' + s + ' in ' + c)
                     plt.xlabel('time (hours)')
-                    if 'c-' not in dtype:
-                        plt.ylabel(dtype)
-                        plt.legend(pls, loc= 'lower right')
-                        plt.ylim(ymin= 0)
-                    else:
+                    if 'c-' in dtype:
                         ax.set_ylabel(dtype)
                         ax2.set_ylabel('mean(OD)')
                         ax.set_ylim(ymin= 0)
                         ax2.set_ylim(ymin= 0)
+                    else:
+                        plt.ylabel(dtype)
+                        if len(plt.gca().get_legend_handles_labels()[1]) == len(pls):
+                            plt.legend(pls, loc= 'lower right')
+                        plt.ylim(ymin= 0)
                     plt.show(block= False)
         if onefig:
             # display and add labels for single figure
@@ -1330,12 +1418,7 @@ class platereader:
         onefile: if True, all figures are saved to on PDF file
         '''
         if onefile:
-            savename= self.wdir + self.name + '.pdf'
-            from matplotlib.backends.backend_pdf import PdfPages
-            with PdfPages(savename) as pdf:
-                for i in plt.get_fignums():
-                    plt.figure(i)
-                    pdf.savefig()
+            gu.figs2pdf(self.wdir + self.name + '.pdf')
         else:
             for i in plt.get_fignums():
                 plt.figure(i)
@@ -1364,7 +1447,7 @@ class platereader:
     def getstats(self, dtype= 'OD', conditions= 'all', strains= 'all', bd= False, cvfn= 'sqexp',
                  esterrs= False, noruns= 5, stats= True, plotodgr= False, conditionincludes= False,
                  strainincludes= False, conditionexcludes= False, strainexcludes= False,
-                 keysmessage= True, figs= True):
+                 keysmessage= True, figs= True, nosamples= 100):
         '''
         Calls fitderiv.py to estimate the first time-derivate.
         The data calculated by fitderiv is added to the overall data structure. For example, p.d['1% Gal']['GAL2']['flogOD'] gives the fit to the log OD curve if OD data is used.
@@ -1377,7 +1460,7 @@ class platereader:
         conditions: list of experimental conditions to be included
         strains: list of strains to be included
         bd: can be used to change the limits on the hyperparameters for the Gaussian process used for the fit. For example, p.odstats('1% Gal', 'GAL2', bd= {1: [-2,-2])}) fixes the flexibility to be 0.01
-        cvfn: covariance function used for fit, either 'sqexp' (default) or 'nn'
+        cvfn: covariance function used for fit, either 'sqexp' (default) or 'nn' or 'matern' or, for example, 'sqexp : matern' to pick the covariance function with the highest maximum likelihood
         esterrs: if True, measurement errors are empirically estimated from the variance across replicates at each time point; if False, the size of the measurement error is fit from the data assuming that this size is the same at all time points
         noruns: number of attempts made for each fit (default is 5), each run is made with random initial estimates of the parameters
         stats: calculate statistics if True
@@ -1388,8 +1471,10 @@ class platereader:
         strainexcludes: ignore strains with strainexcludes in their name
         keysmessage: if True, displays keys for the strains that have been processed
         figs: if True (default), shows the fit and inferred derivative
+        nosamples: number of samples to calculate errors in statistics for growth curve
         '''
         S, noout= self.d, self.nooutchannels
+        linalgmax= 5
         for c in self.getconditions(conditions, True, conditionincludes, conditionexcludes):
             for s in self.getstrains(strains, c, True, strainincludes, strainexcludes):
                 figtitle= s + ' in ' + c
@@ -1410,16 +1495,40 @@ class platereader:
                                  'lag time of ' + dtype]
                         ylabels= [dtype, 'derivative of ' + dtype]
                         logs= False
-                    f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs,
-                                bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns,
-                                exitearly= False, linalgmax= 5)
-                    if figs:
-                        plt.figure()
-                        plt.subplot(2,1,1)
-                        f.plotfit('f', ylabel= ylabels[0], figtitle= figtitle)
-                        plt.subplot(2,1,2)
-                        f.plotfit('df', ylabel= ylabels[1])
-                        plt.show(block= False)
+                    if ' : ' in cvfn:
+                        # multiple covariance functions
+                        cvfns= cvfn.split(' : ')
+                        fs= [fitderiv(S[c][s]['time'], d, figs= False, cvfn= cfn,
+                                        logs= logs, bd= bd, esterrs= esterrs, statnames= snames,
+                                        noruns= noruns, exitearly= False, linalgmax= linalgmax,
+                                        nosamples= nosamples)
+                             for cfn in cvfns]
+                        # pick the covariance function with the highest maximum likelihood
+                        ci= np.argmax([f.logmaxlike for f in fs])
+                        f= fs[ci]
+                        print(' Using', cvfns[ci])
+                        if figs:
+                            plt.figure()
+                            for i, cfn in enumerate(cvfns):
+                                ax= plt.subplot(2, len(cvfns), i+1)
+                                fs[i].plotfit('f', ylabel= ylabels[0], figtitle= figtitle)
+                                ax.set_title(cfn.upper()) if i == ci else ax.set_title(cfn)
+                                plt.subplot(2, len(cvfns), i+1+len(cvfns))
+                                fs[i].plotfit('df', ylabel= ylabels[1])
+                            plt.suptitle(figtitle, fontweight='bold')
+                            plt.show(block= False)
+                    else:
+                        # single covariance function
+                        f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs,
+                                    bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns,
+                                    exitearly= False, linalgmax= linalgmax, nosamples= nosamples)
+                        if figs:
+                            plt.figure()
+                            plt.subplot(2,1,1)
+                            f.plotfit('f', ylabel= ylabels[0], figtitle= figtitle)
+                            plt.subplot(2,1,2)
+                            f.plotfit('df', ylabel= ylabels[1])
+                            plt.show(block= False)
                     if dtype == 'OD':
                         if plotodgr:
                             gu.plotxyerr(np.exp(f.f), f.df,
@@ -1427,26 +1536,48 @@ class platereader:
                                         np.sqrt(f.dfvar), 'OD', 'growth rate', figtitle + ' : growth rate vs OD')
                         S[c][s]['flogOD']= f.f
                         S[c][s]['flogODvar']= f.fvar
-                        S[c][s]['OD ratio']= np.exp(S[c][s]['flogOD'][-1] - S[c][s]['flogOD'][0])
                         S[c][s]['gr']= f.df
                         S[c][s]['grvar']= f.dfvar
                         S[c][s]['d/dtgr']= f.ddf
                         S[c][s]['d/dtgrvar']= f.ddfvar
+                        # extra statistics for OD
+                        fs, gs, hs= f.sample(nosamples)
+                        # log2 OD ratio
+                        da= np.log2(np.exp(fs[-1,:] - fs[0,:]))
+                        S[c][s]['log2 OD ratio']= np.mean(da)
+                        S[c][s]['log2 OD ratio var']= np.var(da)
                         # find local maximum derivative
                         from scipy.signal import argrelextrema
-                        tpts= argrelextrema(f.df, np.greater)[0]
-                        if np.any(tpts):
-                            S[c][s]['local max growth rate']= np.max(f.df[tpts])
-                            S[c][s]['time of local max growth rate']= S[c][s]['time'][tpts[np.argmax(f.df[tpts])]]
+                        da, dt= [], []
+                        for gsample in np.transpose(gs):
+                            tpts= argrelextrema(gsample, np.greater)[0]
+                            if np.any(tpts):
+                                da.append(np.max(gsample[tpts]))
+                                dt.append(f.t[tpts[np.argmax(gsample[tpts])]])
+                        if np.any(da):
+                            S[c][s]['local max growth rate']= np.mean(da)
+                            S[c][s]['local max growth rate var']= np.var(da)
+                            S[c][s]['time of local max growth rate']= np.mean(dt)
+                            S[c][s]['time of local max growth rate var']= np.var(dt)
                         else:
                             S[c][s]['local max growth rate']= np.nan
+                            S[c][s]['local max growth rate var']= np.nan
                             S[c][s]['time of local max growth rate']= np.nan
+                            S[c][s]['time of local max growth rate var']= np.nan
                         # find area under gr vs OD
                         from scipy import integrate, interpolate
-                        sod= np.exp(f.f)
-                        integrand= lambda x: interpolate.interp1d(sod, f.df)(x)
-                        S[c][s]['area under gr vs OD']= integrate.quad(integrand, np.min(sod), np.max(sod),
-                                                                       limit= 100, full_output= 1)[0]
+                        da, dna= [], []
+                        for fsample, gsample in zip(np.transpose(fs), np.transpose(gs)):
+                            sod= np.exp(fsample)
+                            integrand= lambda x: interpolate.interp1d(sod, gsample)(x)
+                            iresult= integrate.quad(integrand, np.min(sod), np.max(sod),
+                                                     limit= 100, full_output= 1)[0]
+                            da.append(iresult)
+                            dna.append(iresult/(np.max(sod) - np.min(sod)))
+                        S[c][s]['area under gr vs OD']= np.mean(da)
+                        S[c][s]['area under gr vs OD var']= np.var(da)
+                        S[c][s]['normalized area under gr vs OD']= np.mean(dna)
+                        S[c][s]['normalized area under gr vs OD var']= np.var(dna)
                     else:
                         S[c][s]['f' + dtype]= f.f
                         S[c][s]['f' + dtype + 'var']= f.fvar
@@ -1463,7 +1594,7 @@ class platereader:
                     return
             if keysmessage:
                 print('\nProcessed strains now have these keys:')
-                self.getkeys(c, s, title= False)
+                self.datavariables(individual= True, conditions= c, strains= s, title= False)
 
     #####
     def comparegrarea(self, ref, com, figs= True):
@@ -1484,6 +1615,16 @@ class platereader:
         gr0= self.d[ref[0]][ref[1]]['gr']
         od1= np.exp(self.d[com[0]][com[1]]['flogOD'])
         gr1= self.d[com[0]][com[1]]['gr']
+        # remove any double values because of OD plateau'ing
+        from scipy.signal import argrelextrema
+        imax= argrelextrema(od0, np.greater)[0]
+        if np.any(imax):
+            od0= od0[:imax[0]]
+            gr0= gr0[:imax[0]]
+        imax= argrelextrema(od1, np.greater)[0]
+        if np.any(imax):
+            od1= od1[:imax[0]]
+            gr1= gr1[:imax[0]]
         # interpolate data
         from scipy import interpolate
         i0= interpolate.interp1d(od0, gr0)
@@ -1493,18 +1634,17 @@ class platereader:
         odfin= np.min([od0[-1], od1[-1]])
         if figs:
             plt.figure()
-            plt.plot(od0, gr0, '.-', od1, gr1, '.-')
+            plt.plot(od0, gr0, 'k-', od1, gr1, 'b-')
             x= np.linspace(odinit, odfin, np.max([len(od0), len(od1)]))
-            plt.fill_between(x, i0(x), i1(x), facecolor= 'red')
+            plt.fill_between(x, i0(x), i1(x), facecolor= 'red', alpha= 0.5)
             plt.xlabel('OD')
             plt.ylabel('growth rate')
-            plt.legend([ref[0] + ' in ' + ref[1], com[0] + ' in ' + com[1]],
-                       loc= 'upper left', bbox_to_anchor= (0.5, 1.05))
+            plt.legend([ref[1] + ' in ' + ref[0], com[1] + ' in ' + com[0]], loc= 'upper left', bbox_to_anchor= (0.5, 1.05))
             plt.title('area between ' + ref[1] + ' in ' + ref[0] + ' and ' + com[1] + ' in ' + com[0])
             plt.show(block= False)
         # perform integration
         from scipy import integrate
-        igrand= lambda x: np.abs(i0(x) - i1(x))
+        igrand= lambda x: i0(x) - i1(x)
         a= integrate.quad(igrand, odinit, odfin, limit= 100, full_output= 1)[0]
         # return normalized area between curves
         return a/(odfin-odinit)
@@ -1530,82 +1670,99 @@ class platereader:
         gu.putpkl(savename, self)
 
 
-    #####
-    def makedataframe(self, dnames, conditions= 'all', strains= 'all', dfname= 'df', nomedia= True, nonull= True,
-                      conditionincludes= False, strainincludes= False, conditionexcludes= False, strainexcludes= False):
+    def makedataframe(self, type, conditions= 'all', strains= 'all', dfname= 'df',
+                       conditionincludes= False, strainincludes= False,
+                       conditionexcludes= False, strainexcludes= False,
+                       nomedia= True, nonull= True, sortby= False, ascending= True):
         '''
-        Makes a data frame (from the Python panda package) and adds as .df to the current instance.
-        For example, either for variables that are measured at each time point (a time column is automatically added)
+        Creates a dataframe (using Pandas) of three different types:
+            'timerow'   : all time-dependent variables as rows
+            'timecol'   : all time-dependent variables as columns
+            'notime'    : only time-independent variables
 
-        p.makedataframe(['gr', 'ODmn'])
-        p.df.T
+        For example,
 
-        or for other variables
-
-        p.makedataframe(['max growth rate', 'lag time'])
-        p.df
+            p.makedataframe('timecol')
+            p.df
+            p.exportdataframe()
 
         Arguments
         --
-        dnames : list of data fields to add (each must either refer to field with a single number or all fields should reference data that is a function of time)
+        type : 'timerow', 'timecol', or 'notime'
         conditions : conditions of interest (default: 'all')
         strains : strains of interest (default: 'all')
         dfname : name to use for dataframe (default: 'df')
-        nomedia : if True, wells labelled media are excluded
-        nonull : if True, wells labelled null are excluded
         conditionincludes: selects only conditions with conditionincludes in their name
         strainincludes: selects only strains with strainincludes in their name
         conditionexcludes: ignore conditions with conditionexcludes in their name
         strainexcludes: ignore strains with strainexcludes in their name
+        nomedia : if True (default), wells labelled media are excluded
+        nonull : if True (default), wells labelled null are excluded
+        sortby: an optional variable (or list of variables) to sort the data by
+        ascending: whether to sort in ascending or descencing order (default: True)
         '''
+        variables, nottimevariables= self.datavariables(out= True, conditions= conditions,
+                                                        strains= strains,
+                                                        conditionincludes= conditionincludes,
+                                                        strainincludes= strainincludes,
+                                                        conditionexcludes= conditionexcludes,
+                                                        strainexcludes= strainexcludes)[1:]
+        both= self.getconditionsandstrains(conditions= conditions, strains= strains,
+                                           conditionincludes= conditionincludes,
+                                           strainincludes= strainincludes,
+                                           conditionexcludes= conditionexcludes,
+                                           strainexcludes= strainexcludes,
+                                           nomedia= nomedia, nonull= nonull)
+        # remove 'time' from the time-dependent variables
+        variables= np.delete(variables, np.nonzero(variables == 'time')[0][0])
+        dfIndex= 0
         S= self.d
-        dnames= gu.makelist(dnames)
-        cs= self.getconditions(conditions, nomedia, conditionincludes, conditionexcludes)
-        # test if data fields are variables that change with time
-        timedata= True
-        for dname in dnames:
-            trialdata= S[cs[0]][self.getstrains(strains, cs[0], True, strainincludes,
-                                                strainexcludes)[0]][dname]
-            if type(trialdata) != np.ndarray or len(trialdata) != len(self.t):
-                timedata= False
-                break
-        if timedata:
-            # data fields are all a function of time
-            data= {}
-            for c in cs:
-                for s in self.getstrains(strains, c, nonull, strainincludes, strainexcludes):
-                    for dname in dnames:
-                        try:
-                            # multi-dimensional array
-                            for i in range(S[c][s][dname].shape[1]):
-                                data[dname +' for\n'+s+'\nin '+c+' replicate '+ str(i)]= S[c][s][dname][:,i]
-                        except IndexError:
-                            # 1-dimensional array
-                            data[dname +' for\n'+s+'\nin '+c]= S[c][s][dname]
-            df= pd.DataFrame(data)
-            df.insert(0, 'time', self.t)
+        import time
+        start= time.time()
+        if type == 'timecol':
+            # each row corresponds to a time-
+            columns= ['condition', 'strain', 'timepoint'] + list(variables)
+            dfs= []
+            for c, s in both:
+                ic= 0
+                dft= pd.DataFrame(columns= columns)
+                dft[columns[0]]= [c for t in self.t]
+                dft[columns[1]]= [s for t in self.t]
+                dft[columns[2]]= self.t
+                for var in variables:
+                    dft[var]= np.array(S[c][s][var]).tolist() if var in S[c][s] else [np.nan for t in self.t]
+                dfs.append(dft)
+            df= pd.concat(dfs)
+        elif type == 'timerow':
+            # each time-point has its own column
+            columns= ['condition', 'strain', 'variable'] + ['timepoint: ' + str(t + 1)
+                                                            for t in range(len(self.t))]
+            allseries= []
+            for c, s in both:
+                allseries += [pd.Series([c, s, var] + [list(S[c][s][var]) if var in S[c][s]
+                                                     else [np.nan for t in self.t]][0], index= columns)
+                              for var in variables]
+            df= pd.DataFrame(allseries, columns= columns)
+        elif type == 'notime':
+            # variables that are independent of time
+            df= pd.DataFrame(columns= ['condition', 'strain'] + list(nottimevariables))
+            for c, s in both:
+                df.loc[dfIndex]= [c, s] + [S[c][s][var] if var in S[c][s] else [np.nan]
+                                           for var in nottimevariables]
+                dfIndex += 1
         else:
-            # data fields are not a function of time
-            snames, data= [], []
-            for c in cs:
-                for s in self.getstrains(strains, c, nonull, strainincludes, strainexcludes):
-                    snames.append(s + ' in ' + c)
-                    data.append([S[c][s][dname] for dname in dnames])
-            df= pd.DataFrame(data, index= snames, columns= dnames)
-            df.sort_index(inplace= True)
-        if hasattr(self, dfname): print('Redefining', dfname)
+            print(type, 'is not recognized')
+            return
+
+        end= time.time()
+        print(end-start)
+
+        # sort data
+        if sortby:
+            df= df.sort_values(by= sortby, ascending= ascending).reset_index(drop= True)
+        # store result
         setattr(self, dfname, df)
 
-
-    def rmdataframe(self, dfname= 'df'):
-        '''
-        Delete a dataframe.
-
-        Arguments
-        --
-        dfname: dataframe to be deleted (default: 'df')
-        '''
-        if hasattr(self, dfname): delattr(self, dfname)
 
 
     def exportdataframe(self, dfname= 'df', ftype= 'xlsx', savename= False):
@@ -1631,6 +1788,17 @@ class platereader:
             print('No dataframe', dfname, 'has been created')
 
 
+    def rmdataframe(self, dfname= 'df'):
+        '''
+        Delete a dataframe.
+
+        Arguments
+        --
+        dfname: dataframe to be deleted (default: 'df')
+        '''
+        if hasattr(self, dfname): delattr(self, dfname)
+
+
 ##########################
 # specialized platereader
 ##########################
@@ -1638,8 +1806,9 @@ class platereader:
 
 class slpr(platereader):
 
-    def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0, asheetnumber= 0,
-             ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True, standardgain= False):
+    def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0,
+                 asheetnumber= 0, ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True,
+                 standardgain= False, ignorestrains= []):
 
         if platereadertype == 'Sunrise':
             # extract time from sheet 0 of Excel file
@@ -1654,7 +1823,7 @@ class slpr(platereader):
 
         # call platereader
         super().__init__(dname, aname, platereadertype, wdir, dsheetnumber, asheetnumber, ODfname,
-                             warn, info, standardgain)
+                             warn, info, standardgain, ignorestrains)
         self.__doc__= super().__doc__
 
         # for Luis

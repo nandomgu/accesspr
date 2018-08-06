@@ -472,7 +472,7 @@ def preprocessExpt(expt, fillnans=True, standardize=False, normOD=0.8, extension
 
 class accesspr:	
     '''
-    accesspr version 4.62(the number matches with that of the compatible platereader software version)
+    accesspr version 4.81(the number matches with that of the compatible platereader software version)
     
     accesspr is a class that allows to integrate and organize the information
     from many plate reader experiments to produce publication-grade plots and tables. 
@@ -482,7 +482,7 @@ class accesspr:
     ***Newest FEATURES***
     self.allReplicates contains the condition in every well in every experiment
     self.plotReplicateMeanNew() and self.interpTimesNew now work with replicate dataframes as an input to include specific replicates
-    selg.getRawData() creates a raw data dictionary to handle the full pr output altogether.
+    self.getRawData() creates a raw data dictionary to handle the full pr output altogether.
     ATTRIBUTES:
     source: 
         the path of the folder that contains the pickle files
@@ -769,7 +769,7 @@ class accesspr:
         #activeExperiments is an array the list of currently relevant pickle files meant to be loaded onto memory.
         #this list is modified by contains functions
         self.activeExpts=[];
-        self.version='4.6'
+        self.version='4.81'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
         self.allConditions=pd.DataFrame()
         self.loadInitial()
