@@ -101,6 +101,7 @@ class platereader:
         self.wdir= wdir
         self.name= dname.split('.')[0]
         self.ODfname= ODfname
+        self.aname=aname
 
         # general parameters
         self.gamma= 0.114   # ratio of 585 to 525 for eGFP
