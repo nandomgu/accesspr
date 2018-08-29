@@ -242,13 +242,16 @@ def alignTime(p, media, strain, FL='c-GFPperod', centerAtPeakFL=0):
 	# time t where growth rate is max for given curve
 	if strain== 'null':
 	    return np.nan, np.nan
-	if centerAtPeakFL==0:
-	    centeredTime=p.t[np.where(p.d[media][strain]['gr']==max(p.d[media][strain]['gr']))]
+	if not ppf.hasKey(p.d[media][strain], 'gr'):
+	    return np.nan
 	else:
-	    centeredTime=p.t[np.where(p.d[media][strain][normalflperod]==max(p.d[media][strain][FL]))]
-	#out= {'alignedTime': alignedTimeVector , 'rawFL':rawFLVector ,'normalizedFL':normalizedFLVector , 'peakFL':peak,  'peakTime':peakTime, 'gr':p.d[media][strain]['gr']}
-	alignedTimeVector=p.t-centeredTime
-	out=alignedTimeVector
+	    if centerAtPeakFL==0:
+	        centeredTime=p.t[np.where(p.d[media][strain]['gr']==max(p.d[media][strain]['gr']))]
+	    else:
+	        centeredTime=p.t[np.where(p.d[media][strain][normalflperod]==max(p.d[media][strain][FL]))]
+	        #out= {'alignedTime': alignedTimeVector , 'rawFL':rawFLVector ,'normalizedFL':normalizedFLVector , 'peakFL':peak,  'peakTime':peakTime, 'gr':p.d[media][strain]['gr']}
+	        alignedTimeVector=p.t-centeredTime
+	        out=alignedTimeVector
 	return out, centeredTime
 	
 def normalizeOverTime(p, media, strain, dtype=normalflperod, subtractBg=0):
