@@ -243,10 +243,13 @@ def alignTime(p, media, strain, FL='c-GFPperod', centerAtPeakFL=0):
 	if strain== 'null':
 	    return np.nan, np.nan
 	if not ppf.hasKey(p.d[media][strain], 'gr'):
-	    return np.nan
+	    out=np.nan;
+	    centeredTime=np.nan;
 	else:
 	    if centerAtPeakFL==0:
 	        centeredTime=p.t[np.where(p.d[media][strain]['gr']==max(p.d[media][strain]['gr']))]
+	        alignedTimeVector=p.t-centeredTime
+	        out=alignedTimeVector
 	    else:
 	        centeredTime=p.t[np.where(p.d[media][strain][normalflperod]==max(p.d[media][strain][FL]))]
 	        #out= {'alignedTime': alignedTimeVector , 'rawFL':rawFLVector ,'normalizedFL':normalizedFLVector , 'peakFL':peak,  'peakTime':peakTime, 'gr':p.d[media][strain]['gr']}
@@ -271,7 +274,10 @@ def alignStats(p, media, strain, dtype, subtractBg=0):
         normalizedFLVector=(noBgFLVector-np.nanmean(noBgFLVector))/np.nanstd(noBgFLVector)
         normalizedFLPeak=np.nanmax(normalizedFLVector)
         alignedTimeVector, centeredTime=alignTime(p,media,strain)
-        alignedPeakTime=alignedTimeVector[np.where(normalizedFLVector==normalizedFLPeak)]
+        try:
+            alignedPeakTime=alignedTimeVector[np.where(normalizedFLVector==normalizedFLPeak)]
+        except:
+            alignedPeakTime=np.nan
         FLPeak=np.nanmax(rawFLVector)
         halfFL=FLPeak/2
         #print('halffl='+str(halfFL))
