@@ -1,6 +1,7 @@
 import platereader as pr
 import matplotlib.pyplot as plt
 import matplotlib.patches as pch
+from matplotlib.lines import Line2D
 import numpy as np
 import pickle
 import pandas as pd
@@ -38,7 +39,7 @@ def whiteWash(colorhex, num, testplot=False):
 	return cmap
 
 
-def createFigLegend( keys=0, cols=0, dic=0, loc='upper right'):
+def createFigLegend( keys=0, cols=0, markers=[None]*200, dic=0, loc='upper right'):
     '''creates an orderly figure legend based on a keys list and a colors list, or alternatively sorting the elements in dic.
     '''
     lg=plt.figlegend(handles=[], labels=[], loc=[] )## clearing all previous figure legends. 
@@ -51,7 +52,9 @@ def createFigLegend( keys=0, cols=0, dic=0, loc='upper right'):
         cols= list([dic[key] for key in keys])
     patches=[]
     lgnds=[]
-    [patches.append(pch.Patch(keys[j], color=cols[j])) for j in range(0, np.size(keys))]
+    #[patches.append(pch.Patch(keys[j], color=cols[j])) for j in range(0, np.size(keys))] #patches
+    [patches.append(Line2D([0], [0], marker=markers[j], color=cols[j], label=keys[j],markeredgecolor=cols[j], markerfacecolor=cols[j],lw=2, markersize=10)) for j in range(0, np.size(keys))]  
+    #[patches.append(pch.Patch(keys[j], color=cols[j])) for j in range(0, np.size(keys))] #lines
     [lgnds.append(keys[j]) for j in range(0, np.size(keys))]
     plt.figlegend(patches, lgnds, loc)
     

@@ -392,7 +392,7 @@ def getRawData(expt):
         rawdata[dt]=pd.DataFrame(data=actualdata, index=welllabels,columns=timelabels).replace('OVER', value=np.nan) 
     return rawdata
 
-def bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col='black', alpha=0.15):
+def bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col='black', alpha=0.15, marker=None, markevery=10):
     '''
     bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col='black', alpha=0.15)
         creates bootstrap replicates from timeseriesxreplicate matrix obj[dtype], and plots the mean and std deviation of these replicates.
@@ -423,7 +423,7 @@ def bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col=
     if bootstrap>0:
         totalmn=np.nanmean(reps,1)
         totalsd=np.nanstd(reps,1)
-        plt.plot(obj[centeringVariable], totalmn, color=col)
+        plt.plot(obj[centeringVariable], totalmn, color=col, marker=marker, markevery=markevery)
         plt.fill_between(obj[centeringVariable], totalmn-totalsd, totalmn+totalsd, color=col, alpha=alpha)
         plt.xlabel(centeringVariable)
         plt.ylabel(dtype)
@@ -1478,7 +1478,8 @@ class accesspr:
                 self.aligned=False
                 print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
-    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False):
+    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, loc='upper left'):
+        markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if centeringVariable=='Time centered at gr peak':
             print('removing null from strain list as it does not have growth rate')
@@ -1534,7 +1535,7 @@ class accesspr:
                     i_interpolatedCols = [conditionsDF.index.get_loc(i_e) for i_e in i_DF] # find the corresponding position in the data frame (equals the number of columns in interpolate)
                     print(i_interpolatedCols)
                     interpolatedToUse={}
-                    interpolatedToUse[dtype] = interpolated[dtype][:,i_interpolatedCols]
+                    interpolatedToUse[dtype] = interpolated[dtype][:,np.where(conditionsDF[factor]== fact)[0]]
                     interpolatedToUse[centeringVariable]=interpolated[centeringVariable]
                     #final object here is a dictionary for each factor in order to obtain separate means and sds for each
                     if not(isinstance(factorColors, dict)): #if the dictionary never existed we create it but remember we did with the flag
@@ -1544,15 +1545,16 @@ class accesspr:
                         createdColorsFlag=1
                     if createdColorsFlag==0 or ppf.hasKey(factorColors,fact)==False:
                         #if there is no factorColors or if the argument does not contain a color for the given factor we make one
-                        factorColors[fact]=colors.strongColors[i_fact] 
-                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha)
+                        factorColors[fact]=(colors.strongColors*100)[i_fact] 
+                        mrkr= (markers*100)[i_fact]
+                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha, marker=mrkr, markevery=10)
                     interpolated['Group_'+fact+'_'+dtype+'mn']=interpolatedFinal[dtype+'mn']
                     if bootstrap>0:
                         st=dtype+'bootstrapsd'
                     else:
                         st=dtype+'sd'
                     interpolated['Group_'+fact+'_'+st]=interpolatedFinal[st]
-                ppf.createFigLegend(dic=factorColors) #creating a legend for the figure
+                ppf.createFigLegend(keys=list(factorColors.keys()), cols= list(factorColors.values()), markers=markers, loc=loc ) #creating a legend for the figure
                 return(interpolated, factorColors) 
             else:
                     #interpolated final contains the mean and sd that were plotted
@@ -1988,6 +1990,7 @@ class accesspr:
         interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
         func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
         for j in range(0, np.size(replicateMatrix, 0)):
+            #print('processing replicate number', j)
             expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
             #finding the points that fit the range
             fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
@@ -1996,6 +1999,8 @@ class accesspr:
             if not(plateloc in self.data[expt].ignoredwells):
                 platelocIndex=np.where([plateloc==k for k in self.data[expt].d[media][strain]['plateloc']])[0][0]
             else:
+                numpoints=np.size(self.data[expt].d[media][strain][dtype][fitPoints, :],0)
+                adjustedTimes[dtype].append(np.zeros([numpoints,1])*np.nan)
                 continue
             if not(dtype.endswith('mn')) and not(dtype.endswith('gr')) and not(dtype.endswith('perod')) and not(dtype.endswith('var')):
                 adjustedTimes[dtype].append(self.data[expt].d[media][strain][dtype][fitPoints, platelocIndex])
