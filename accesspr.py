@@ -1478,7 +1478,7 @@ class accesspr:
                 self.aligned=False
                 print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
-    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, loc='upper left'):
+    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if centeringVariable=='Time centered at gr peak':
@@ -1529,6 +1529,13 @@ class accesspr:
             if isinstance(factor, str): 
             ### This if block interpolates of full set of conditions together, but are plotted by group based on variable factor. Lucia Bandiera 20180501
                 createdColorsFlag=0
+                createdMarkersFlag=0
+                if not(isinstance(factorColors, dict)):  #if the color dictionary never existed we create it but remember we did with the flag
+                    factorColors=ppf.colorDict(keys=np.unique(conditionsDF[factor].values), colors=colors.strongColors*100)
+                    createdColorsFlag=1
+                if not(isinstance(factorMarkers, dict)): #if the marker dictionary never existed we create it but remember we did with the flag
+                    factorMarkers=ppf.colorDict(keys=np.unique(conditionsDF[factor].values), colors=markers) #this dict assembly works well for markers so it is great
+                    createdMarkersFlag=1
                 for i_fact,fact in enumerate(conditionsDF[factor].unique()):# iterate over the factor levels
                     print(fact)
                     i_DF = conditionsDF.index[conditionsDF[factor]== fact].get_values() # find the indexes of the dataframe in which the factor level occurs
@@ -1538,24 +1545,26 @@ class accesspr:
                     interpolatedToUse[dtype] = interpolated[dtype][:,np.where(conditionsDF[factor]== fact)[0]]
                     interpolatedToUse[centeringVariable]=interpolated[centeringVariable]
                     #final object here is a dictionary for each factor in order to obtain separate means and sds for each
-                    if not(isinstance(factorColors, dict)): #if the dictionary never existed we create it but remember we did with the flag
-                        factorColors={}
-                        createdColorsFlag=0
-                    else:
-                        createdColorsFlag=1
-                    if createdColorsFlag==0 or ppf.hasKey(factorColors,fact)==False:
+                    #if not(isinstance(factorColors, dict)): #if the dictionary never existed we create it but remember we did with the flag
+                    #    factorColors={}
+                    #    factorMarkers={}
+                    #    createdColorsFlag=0
+                    #else:
+                    #    createdColorsFlag=1
+                    if ppf.hasKey(factorColors,fact)==False: 
                         #if there is no factorColors or if the argument does not contain a color for the given factor we make one
                         factorColors[fact]=(colors.strongColors*100)[i_fact] 
-                        mrkr= (markers*100)[i_fact]
-                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha, marker=mrkr, markevery=10)
+                    if ppf.hasKey(factorMarkers,fact)==False: 
+                        factorMarkers[fact]=(markers*100)[i_fact]
+                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha, marker=factorMarkers[fact], markevery=10)
                     interpolated['Group_'+fact+'_'+dtype+'mn']=interpolatedFinal[dtype+'mn']
                     if bootstrap>0:
                         st=dtype+'bootstrapsd'
                     else:
                         st=dtype+'sd'
                     interpolated['Group_'+fact+'_'+st]=interpolatedFinal[st]
-                ppf.createFigLegend(keys=list(factorColors.keys()), cols= list(factorColors.values()), markers=markers, loc=loc ) #creating a legend for the figure
-                return(interpolated, factorColors) 
+                ppf.createFigLegend(keys=list(factorColors.keys()), cols= list(factorColors.values()), markers=list(factorMarkers.values()), loc=loc ) #creating a legend for the figure
+                return(interpolated, factorColors, factorMarkers) 
             else:
                     #interpolated final contains the mean and sd that were plotted
                     interpolatedFinal=bootstrapInterps(interpolated, centeringVariable, dtype, bootstrap=bootstrap, col=col, alpha=alpha)
