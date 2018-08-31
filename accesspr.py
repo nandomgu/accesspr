@@ -490,7 +490,7 @@ class accesspr:
     
     ***Newest FEATURES***
     self.allReplicates contains the condition in every well in every experiment
-    self.plotReplicateMeanNew() and self.interpTimesNew now work with replicate dataframes as an input to include specific replicates
+    self.plotReplicateMeanNew() and self.interptimesnew now work with replicate dataframes as an input to include specific replicates
     self.getRawData() creates a raw data dictionary to handle the full pr output altogether.
     ATTRIBUTES:
     source: 
@@ -1513,7 +1513,7 @@ class accesspr:
                 for s in strain:
                     conditionsDF=DFsubset(DFsubset(DFsubset(self.allReplicates, 'media', [m]), 'strain', s), 'experiment', experiments)
                     #print('processing '+m)
-                    interpolated= self.interpTimesNew(replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
+                    interpolated= self.interptimesnew(replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
                     interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
                     interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
                     if normalise==True:
@@ -1521,7 +1521,7 @@ class accesspr:
                     interpolatedFinal=bootstrapInterps(interpolated, centeringVariable, dtype, bootstrap=bootstrap, col=col, alpha=alpha)
                     return(interpolatedFinal) 
         if isinstance(conditionsDF, pd.DataFrame): #if the conditions matrix is 
-            interpolated= self.interpTimesNew( replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
+            interpolated= self.interptimesnew( replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
             interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
             interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
             if normalise==True:
@@ -1769,7 +1769,7 @@ class accesspr:
         Generates a dataframe where columns are media, strain and the values of dtype at times (one column per element in times).
          and and each row is the value of dtype at those times for one replicate.
         '''
-        it= self.interpTimes(media,strain,dtype=dtype)
+        it= self.interpTimesNew(replicateMatrix=DFsubset(DFsubset(self.allReplicates, 'media', [media]), 'strain', [strain]),dtype=dtype)
         if includeMediaStrain==True:
             fin=pd.DataFrame( columns= ['experiment', 'machine','media', 'strain']+ times)
         else:
@@ -1785,7 +1785,7 @@ class accesspr:
     def timeStatAll(self, times, media='all', strains='all', aligned=False, dtype='OD', scale=False, subtractBackground=False):
         df=pd.DataFrame()
         if scale != False:
-            maxdf=self.extractAllInfo(excludeNull=True) #extract all info to get maxima.
+            maxdf=self.extractAllInfoNew(excludeNull=True) #extract all info to get maxima.
             if media !='all': #if media subset is entered then filter dataframe by that subset
                 maxdf=DFsubset(maxdf, 'media', media)
             if strains !='all':#if strain subset is entered then filter dataframe by that subset
@@ -1980,7 +1980,7 @@ class accesspr:
             #except ValueError:
             #print('Error: interpolation time out of bounds. please screen for time discrepancies')
         return finalDict
-    def interpTimesNew(self, replicateMatrix=False, dtype='OD', centeringVariable='time', descriptors=False):    
+    def interptimesnew(self, replicateMatrix=False, dtype='OD', centeringVariable='time', descriptors=False):    
         '''
         interpTimes(self, media, strain, dtype='OD', centeringVariable='time')   
         interpolate all replicates across the same time scale.
@@ -2078,7 +2078,7 @@ class accesspr:
                 final[key]=dic[key]
         return final
 
-    def extractAllInfoNew(self, replicateDF=[], growthstats=[], flstats=[]):
+    def extractallinfonew(self, replicateDF=[], growthstats=[], flstats=[]):
         if not isinstance(replicateDF, pd.DataFrame):
             replicateDF= self.allcontents
         df=pd.DataFrame(index= replicateDF.index, columns=self.extractionFields)
