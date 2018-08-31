@@ -500,13 +500,13 @@ class accesspr:
         The keys are each experiment's pickle file name. e.g. xpr.data[picklefilename].d[media][strain]
     allContents:
         a pandas dataframe containing all unique combinations of strains and media found in all experiments. 
-    statContents:
+    statcontents:
         a pandas dataframe describing whether each expe
     extractionFields: 
         name of the columns of all the features to be extracted when calling self.extractRepInfo() and self.extractAllInfo()
-    allStrains: 
+    allstrains: 
         contains a nonredundant list of all strains found in the experiments.
-    allMedia:
+    allmedia:
         contains a nonredundant list of all media found in the experiments.
     allExperiments:
         contains a nonredundant list of all experiments in the accesspr object.
@@ -532,10 +532,10 @@ class accesspr:
              produces self.allConditions attribute (see attributes)
              
         * containsstat(self, STAT):
-            produces the statContents attribute (see attributes)
+            produces the statcontents attribute (see attributes)
             
         * listcontents(self, verbose=True):
-            fills the allStrains and allMedia attributes. If verbose==True, produces a human-readable display of the contents of each experiment.
+            fills the allstrains and allmedia attributes. If verbose==True, produces a human-readable display of the contents of each experiment.
             
         *assignFL(mainFL='noFL', mainFLperod='noFLperod')
             if arguments are specified, sets the given channels as the  default fluorescence channels for each experiment. 
@@ -798,7 +798,7 @@ class accesspr:
         self.exptColors=False  ##### list of colours to be assigned to each media during plotting routines. currently not in use.
         self.aligned=False
         self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.statContents=pd.DataFrame( index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
+        self.statcontents=pd.DataFrame( index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
         self.wildTypeList=['WT', '77.WT', '229.WT']
         self.machines={}
         self.serialnumbers={}
@@ -814,7 +814,7 @@ class accesspr:
         except:
             print('Impossible to get  allContents list for all experiments.')
         self.refstrains=dict()
-        self.checkAllStats()
+        self.checkallstats()
         if analyseFL==True:
             self.analyseFL=True
             self.FL={}
@@ -837,8 +837,8 @@ class accesspr:
             print('Problem aligning experiments, possibly owing to missing growth rate. Consider running .getstats()')
         self.findMachines()
         self.replicateLocations()
-    def checkAllStats(self):
-        self.statContents=pd.DataFrame( index= list(self.data.keys()))
+    def checkallstats(self):
+        self.statcontents=pd.DataFrame( index= list(self.data.keys()))
         for k in self.defaultStats:
             self.containsstat(k, printstats=False)
             #self.containsstat('GFP', printstats=False)
@@ -857,9 +857,9 @@ class accesspr:
             #self.containsstat('c-GFP50perod', printstats=False)
             #self.containsstat('FLperod', printstats=False)
     def getNormFactor(self):
-        #if self.allExperiments != self.activeExpts:
+        #if self.allexperiments != self.activeExpts:
         #    self.loadFresh()
-        for expt in self.allExperiments:
+        for expt in self.allexperiments:
             for m in self.data[expt].allconditions:
                 #this is the wildtype in this experiment
                 s=[j in self.wildTypeList for j in self.data[expt].allstrains]
@@ -943,7 +943,7 @@ class accesspr:
         preprocessExpt(expt, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' )
         preprocess all experiments to fix problems in measurement and normalize data
         '''
-        for exp in self.allExperiments:
+        for exp in self.allexperiments:
             preprocessExpt(self.data[exp], fillnans=fillnans, extension=extension, supporting='GFP60', main='GFP80')
     def stageData():
         ##future: add way to verify that data changes have been made
@@ -978,7 +978,7 @@ class accesspr:
             exptList=self.activeExpts
         #clearing up previously loaded data.
         self.data={}
-        self.checkAllStats()
+        self.checkallstats()
         #from pickle.
         for entry in exptList:
             #making sure the entry is not in ignorefiles or is in onlyfiles
@@ -986,7 +986,7 @@ class accesspr:
             print('trying to open ', entry, 'from the information in exptInfo')
             self.data[entry] = pr.platereader(self.exptInfo[entry]['datapath'],self.exptInfo[entry]['contentspath'])
     def findMachines(self):
-        for expt in self.allExperiments:
+        for expt in self.allexperiments:
             try:
                 self.machines[expt]= self.data[expt].machine
             except:
@@ -1021,9 +1021,9 @@ class accesspr:
         we search for the consensus, and select the consensus as the main fluorescence
         '''
         
-        GFPFields=['GFP' in key for key in self.statContents.keys()]
+        GFPFields=['GFP' in key for key in self.statcontents.keys()]
         ###Getting fields that contain GFP and are present in all experiments		
-        self.consensusFLs=self.statContents.keys()[GFPFields][np.where([np.around(sum(self.statContents[field]))== np.size(self.statContents,0) for field in  self.statContents.keys()[GFPFields]])]
+        self.consensusFLs=self.statcontents.keys()[GFPFields][np.where([np.around(sum(self.statcontents[field]))== np.size(self.statcontents,0) for field in  self.statcontents.keys()[GFPFields]])]
         
         if mainFL!= 'noFL':  ###priority to specified fluorescence
             for expt in self.data.keys():
@@ -1088,7 +1088,7 @@ class accesspr:
                         self.FL[expt]['mainFLperod']='c-'+mainFL+'perod'
                         self.FL[expt]['mainFLperodvar']='c-'+mainFL+'perodvar'
                 else:
-                    print(' \nplease add fluorescence channels manually. \ncheck the contents using xpr.containsstat() and xpr.statContents.')
+                    print(' \nplease add fluorescence channels manually. \ncheck the contents using xpr.containsstat() and xpr.statcontents.')
                 
                 #                 
                 #                 
@@ -1115,32 +1115,32 @@ class accesspr:
                 #                                     self.FL[expt]['mainFLperod']=mainFLperod
                 #                                     self.FL[expt]['mainFLperodvar']=mainFLperod+perodvar'
                 #else: 
-                    #print('no consensus Fluorescence was found in all experiments. please check the contents using xpr.containsstat() and xpr.statContents.')
+                    #print('no consensus Fluorescence was found in all experiments. please check the contents using xpr.containsstat() and xpr.statcontents.')
         #else:
         ###Block for when there is no same fluorescence in all experiments To be filled later
     def listcontents(self, verbose=True):
         '''
         Lists all the different conditions and strains that are contained 
-        in the different experiments. Assembles xpr.allStrains, xpr.allMedia and xpr.allExperiments
+        in the different experiments. Assembles xpr.allstrains, xpr.allmedia and self.allexperiments
         Arguments:
         verbose: prints the contents of every experiment to screen.
         '''
         D = self.data
-        self.allMedia=set()
-        self.allStrains=set()
-        self.allExperiments=[]
+        self.allmedia=set()
+        self.allstrains=set()
+        self.allexperiments=[]
         for exp in D.keys():
-            self.allExperiments.append(exp)
+            self.allexperiments.append(exp)
             if verbose==True:
                 print('\n\nExperiment ('+exp+') contains:\n------------------ ')
             for media in D[exp].d.keys():
                 if verbose==True:
                     print('\nMedium ('+media+'): ',)
-                self.allMedia.add(media)
+                self.allmedia.add(media)
                 for strain in sorted(D[exp].d[media].keys()):
                     if verbose==True:
                         print( strain +',')
-                    self.allStrains.add(strain)
+                    self.allstrains.add(strain)
                 
     def containsstat(self, stat, printstats=False):
         '''checks whether the experiments contain the given statistic stat.
@@ -1156,14 +1156,14 @@ class accesspr:
                 if ppf.hasKey(self.data[key].d[media][strain], stat):
                     percentage=percentage+ 1/np.size(cl, 0)
                     #print(percentage)
-                    self.statContents.loc[key, stat]=percentage
+                    self.statcontents.loc[key, stat]=percentage
                     if printstats==True:
-                        print(self.statContents)
+                        print(self.statcontents)
     #def backup(self):
     #    '''generates numbered backup pickles to backtrack processing in case something fails'''
     def resetFL(self):
         '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
-        for expt in xpr.allExperiments:
+        for expt in self.allexperiments:
             xpr.data[expt].reset()
     def containssetup(self, media, strain, verbose=False, strict=True, musthave='gr'):
         '''
@@ -1198,21 +1198,21 @@ class accesspr:
     def strainContains(self, strng):
         '''retrieves all strains whose name contains a specific identifier strng
         '''
-        sd=list(self.allStrains)
-        return [sd[c] for c in np.where([strng in j for j in  self.allStrains])[0]]
+        sd=list(self.allstrains)
+        return [sd[c] for c in np.where([strng in j for j in  self.allstrains])[0]]
 
     def mediaContains(self, strng):
         '''retrieves all strains whose name contains a specific identifier strng
         '''
-        sd=list(self.allMedia)
-        return [sd[c] for c in np.where([strng in j for j in  self.allMedia])[0]]
+        sd=list(self.allmedia)
+        return [sd[c] for c in np.where([strng in j for j in  self.allmedia])[0]]
     
     def getAllContents(self):
         '''
         getAllContents(self)
         creates two dataframes in the accesspr object:
             self.allConditions.- a dataframe of unique media/strain conditions in all experiments (useful for looping through all conditions once)
-            self.allContents.- a dataframe containing reating experiment, media, strain and plate locations of each condition.
+            self.allcontents.- a dataframe containing reating experiment, media, strain and plate locations of each condition.
             This object is useful when you want to only consider or merge certain wells or biological replicates 
         '''
         cl= pd.DataFrame()
@@ -1222,7 +1222,7 @@ class accesspr:
             cl= pd.concat([cl, ppf.conditionList(self.data[key])], ignore_index=True)
             rl= pd.concat([rl, ppf.replicateList(self.data[key])], ignore_index=True)
         self.allReplicates=rl
-        self.allContents=cl
+        self.allcontents=cl
         self.allConditions= pd.DataFrame(np.column_stack([cl.values[:,1], cl.values[:,2]]), columns=['media', 'strain'])
         self.allConditions=self.allConditions.drop_duplicates()
 
@@ -1233,7 +1233,7 @@ class accesspr:
             experiments=list(self.data.keys())
         self.containsstat('c-'+f[0]+'perod')
         for key in experiments: 
-            #if self.statContents.loc[key, 'c-'+f[0]+'perod']==1 and rerun==False:
+            #if self.statcontents.loc[key, 'c-'+f[0]+'perod']==1 and rerun==False:
             #    print('Experiment ', key, ' already contains FLperod')
             #    continue
             whichref= np.where(np.array([c in self.data[key].allstrains for c in refstrain])) #which ref of the ones added is in this experiment
@@ -1263,7 +1263,7 @@ class accesspr:
         if experiments=='all':
             experiments=list(self.data.keys())
         for key in experiments:
-            cl=self.allContents[self.allContents['experiment']==key][['media','strain']]
+            cl=self.allcontents[self.allcontents['experiment']==key][['media','strain']]
             for j in range(0, np.size(cl,0)):
                 #try:
                 #print(j)
@@ -1315,7 +1315,7 @@ class accesspr:
         chosen depends on the main fluorescence assigned to that experiment.
         '''
         if exptColors==0:
-            exptColors= colorDict(keys=xpr.allExperiments)
+            exptColors= colorDict(keys=self.allexperiments)
         cl= ac.DFsubset(self.allConditions, 'strain', ['null'])
         cl=cl.reset_index(drop=True)
         for j in range(0, np.size(cl, 0)):
@@ -1343,10 +1343,10 @@ class accesspr:
         if type(experiments)==str and experiments != 'all':
             experiments=[experiments]
         for key in experiments: 
-            if self.statContents.loc[key, 'gr']==1 and dtype=='OD' and rerun==False:
+            if self.statcontents.loc[key, 'gr']==1 and dtype=='OD' and rerun==False:
                 print('Experiment ', key, ' already contains gr')
                 continue
-            #if self.statContents.loc[key, 'd/dt FLperod']==1 and dtype==['FLperod'] and rerun==False:
+            #if self.statcontents.loc[key, 'd/dt FLperod']==1 and dtype==['FLperod'] and rerun==False:
             #   print('Experiment ', key, ' already contains d/dt FLperod')
             #   continue
             cl=ppf.conditionList(self.data[key])[['media', 'strain']].values
@@ -1411,9 +1411,9 @@ class accesspr:
         that contains the requested setup.
         '''
         if not(conditions):
-            conditions=self.allContents
-        for j in range(0, np.size(xpr.allContents,0)+1):
-            expt, media, strain, plateloc= xpr.allContents.values[j] 
+            conditions=self.allcontents
+        for j in range(0, np.size(self.allcontents,0)+1):
+            expt, media, strain, plateloc= self.allcontents.values[j] 
             flag=0
             if strain== 'null':
                 alignedTimeGR=np.nan
@@ -1467,8 +1467,8 @@ class accesspr:
             self.containsstat('gr')
             self.containsstat('Time centered at gr peak')
             self.containsstat('Time centered at FL peak')
-            if 'Time centered at gr peak' in list(self.statContents.columns.values):
-                grAlignedFraction=self.statContents['Time centered at gr peak'].sum()/ np.size(self.statContents['Time centered at gr peak'])
+            if 'Time centered at gr peak' in list(self.statcontents.columns.values):
+                grAlignedFraction=self.statcontents['Time centered at gr peak'].sum()/ np.size(self.statcontents['Time centered at gr peak'])
             else:
                 grAlignedFraction=0
             if grAlignedFraction==1:
@@ -1476,7 +1476,7 @@ class accesspr:
                 print('Experiments aligned successfully.')
             else:
                 self.aligned=False
-                print( str(self.statContents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statContents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statContents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
+                print( str(self.statcontents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statcontents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statcontents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
     def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
@@ -1488,7 +1488,7 @@ class accesspr:
             if isinstance(conditionsDF, pd.DataFrame):
                 conditionsDF= conditionsDF[conditionsDF['strain'].values != 'null']
         if experiments=='all':
-            experiments=self.allExperiments
+            experiments=self.allexperiments
         else:
             if isinstance(experiments, str):
                 experiments=[experiments]
@@ -1738,7 +1738,7 @@ class accesspr:
         self.containssetup(media, strain, strict=False)
         if exptColors==False:
             if color:
-                exptColors= ppf.colorDict(keys= self.allExperiments, colors= color* np.size(self.allExperiments))
+                exptColors= ppf.colorDict(keys= self.allexperiments, colors= color* np.size(self.allexperiments))
             else:
                 exptColors=dict(zip(self.containslist, ppf.randomColors(np.size(self.containslist))))
         patches=[]
@@ -1862,7 +1862,7 @@ class accesspr:
         
     def replicateLocations(self):
         if not self.allConditions.empty:
-            daf=pd.DataFrame(index=[self.allConditions['strain'], self.allConditions['media']], columns=self.allExperiments)
+            daf=pd.DataFrame(index=[self.allConditions['strain'], self.allConditions['media']], columns=self.allexperiments)
             daf=daf.fillna(0)
             for j in daf.index:
                 self.containssetup(media=j[1], strain=j[0], strict=False)
@@ -2051,7 +2051,7 @@ class accesspr:
         patches=[]
         legends=[]
         if strains==True:
-            legends= self.allStrains[self.allStrains != 'null']
+            legends= self.allstrains[self.allstrains != 'null']
             legends= legends[ ['WT' in x for x in legends]]
         patches= [pch.Patch(color=hxt4col),pch.Patch(color=std1col),pch.Patch(color=rgt2col)]
         legends=['409.Hxt4', '403.std1', '506.rgt2']
@@ -2080,7 +2080,7 @@ class accesspr:
 
     def extractAllInfoNew(self, replicateDF=[], growthstats=[], flstats=[]):
         if not isinstance(replicateDF, pd.DataFrame):
-            replicateDF= self.allContents
+            replicateDF= self.allcontents
         df=pd.DataFrame(index= replicateDF.index, columns=self.extractionFields)
         for j in range(0, np.size(replicateDF,0)):
             expt, media, strain, plateloc= replicateDF.values[j]
@@ -2264,25 +2264,25 @@ class accesspr:
         df= self.getMediaValues(df)
         return df
     def fixNaNs(self, dtype='GFP80', repairWith='GFP70', experiments=False):
-        self.statContents
+        self.statcontents
         if experiments==False:
-            experiments=self.allExperiments
+            experiments=self.allexperiments
         for expt in experiments:
             plt.figure()
             if self.machines[expt]=='Plate Reader 2' :
-                if np.isnan(self.statContents.loc[expt, repairWith])==False:
+                if np.isnan(self.statcontents.loc[expt, repairWith])==False:
                     ppf.transformEach(self.data[expt], stat1=repairWith, stat2=dtype, plot=True)
                     ppf.replaceStat(self.data[expt], dtype, replaceWith='transformed'+repairWith)
                     self.containsstat('transformed'+repairWith)
                 else:
                     try:
-                        if np.isnan(self.statContents.loc[expt, 'GFP75'])==False:
+                        if np.isnan(self.statcontents.loc[expt, 'GFP75'])==False:
                             ppf.transformEach(self.data[expt], stat1='GFP75', stat2=dtype, plot=True)
                             ppf.replaceStat(self.data[expt], 'GFP80', replaceWith='transformedGFP75')
                             self.containsstat('transformedGFP75')
                     except:
                         print('no GFP75')
-                        if np.isnan(self.statContents.loc[expt, 'GFP60'])==False:
+                        if np.isnan(self.statcontents.loc[expt, 'GFP60'])==False:
                             ppf.transformEach(self.data[expt], stat1='GFP60', stat2=dtype, plot=True)
                             ppf.replaceStat(self.data[expt], 'GFP80', replaceWith='transformedGFP60')
                             self.containsstat('transformedGFP60')
