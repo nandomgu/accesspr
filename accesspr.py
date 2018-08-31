@@ -1998,12 +1998,14 @@ class accesspr:
             startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
         interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
         func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
+        namesarray=[]
         for j in range(0, np.size(replicateMatrix, 0)):
             #print('processing replicate number', j)
             expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
+            namesarray.append(expt+' '+media+' '+strain+' '+' '+plateloc)
             #finding the points that fit the range
             fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
-            #print(np.shape(self.data[expt].d[media][strain][dtype])[1])
+            #print(np.shape(self.data[expt]. d[media][strain][dtype])[1])
             #Index in the data matrix that corresponds to this specific well
             if not(plateloc in self.data[expt].ignoredwells):
                 platelocIndex=np.where([plateloc==k for k in self.data[expt].d[media][strain]['plateloc']])[0][0]
@@ -2025,6 +2027,7 @@ class accesspr:
                 finalDict[dtype][:, j]=fint(finalDict[centeringVariable])
             except:
                 finalDict[dtype][:, j]=np.empty([np.size(finalDict[centeringVariable],0)])*np.nan
+        finalDict['names']=namesarray
         return finalDict
 
     def addLegend(self, strains=False, media=False, strainColors=False, mediaColors=False):
