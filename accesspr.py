@@ -1980,11 +1980,14 @@ class accesspr:
             #except ValueError:
             #print('Error: interpolation time out of bounds. please screen for time discrepancies')
         return finalDict
-    def interpTimesNew(self, replicateMatrix=False, dtype='OD', centeringVariable='time'):    
+    def interpTimesNew(self, replicateMatrix=False, dtype='OD', centeringVariable='time', descriptors=False):    
         '''
         interpTimes(self, media, strain, dtype='OD', centeringVariable='time')   
         interpolate all replicates across the same time scale.
         replicateMatrix is a matrix of the format of self.allReplicates with the specific replicates to interpolate
+        dtype: data type to extract. it must be present in all wells.
+        centeringVariable: the variable used for the x axis
+        descriptors: the final object will contain full descriptor factors for each condition:  expt, media, strain, plateloc
         '''
         interpRange=[]
         maxLengths=[]
@@ -1999,10 +2002,19 @@ class accesspr:
         interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
         func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
         namesarray=[]
+        exptsarray=[]
+        mediaarray=[]
+        strainsarray=[]
+        platelocarray=[]
         for j in range(0, np.size(replicateMatrix, 0)):
             #print('processing replicate number', j)
             expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
             namesarray.append(expt+' '+media+' '+strain+' '+' '+plateloc)
+            if descriptors==True:
+                exptsarray.append(expt)
+                mediaarray.append(media)
+                strainsarray.append(strain)
+                platelocarray.append(plateloc)
             #finding the points that fit the range
             fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
             #print(np.shape(self.data[expt]. d[media][strain][dtype])[1])
@@ -2028,6 +2040,11 @@ class accesspr:
             except:
                 finalDict[dtype][:, j]=np.empty([np.size(finalDict[centeringVariable],0)])*np.nan
         finalDict['names']=namesarray
+        if descriptors==True:
+            finalDict['experiment']=exptsarray
+            finalDict['media']=mediaarray
+            finalDict['strain']=strainsarray
+            finalDict['plateloc']=platelocarray
         return finalDict
 
     def addLegend(self, strains=False, media=False, strainColors=False, mediaColors=False):
