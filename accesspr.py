@@ -19,6 +19,9 @@ import colors
 ### RAW DATA FUNCTIONS. functions that receive a rawdata dictionary where rawdata[stat] is a matrix of m wells x n timepoints,
 ###coming directly from the plate reader excel sheet.
 
+formatlist=lambda t: [t] if np.size(t)==1 else t
+formatval=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, int) else np.array(t)
+
 def internalStd(rawdata, stat, wtindices, fr=0.4, to=0.7, len=30):
     '''
     regression, transformedData=internalStd(rawdata, stat, wtindices, fr=0.4, to=0.7, len=30)
@@ -1772,26 +1775,7 @@ class accesspr:
             plt.xlim(xlim)
         return exptColors
 
-    def timeStatAligned(self, media, strain, times=[0], dtype='OD', includeMediaStrain=True):
-        '''
-        df=timeStatAligned(self, media, strain, times=[0], dtype='FLperod', includeMediaStrain=True):
-        Generates a dataframe where columns are media, strain and the values of dtype at times (one column per element in times).
-         and and each row is the value of dtype at those times for one replicate.
-        '''
-        it= self.interpTimesNew(replicateMatrix=DFsubset(DFsubset(self.allReplicates, 'media', [media]), 'strain', [strain]),dtype=dtype)
-        if includeMediaStrain==True:
-            fin=pd.DataFrame( columns= ['experiment', 'machine','media', 'strain']+ times)
-        else:
-            fin=pd.DataFrame(columns= times)
-        for j in range(0, np.size(it[dtype],1)):
-            f = scint.interp1d(it['time'], it[dtype][:,j])
-            fin.loc[j, 'experiment']=self.containslist[j]
-            fin.loc[j,'machine']=self.machines[self.containslist[j]]
-            fin.loc[j,'media']= media
-            fin.loc[j,'strain']= strain
-            fin.loc[j,times]= f(times)
-        return fin
-    def timeStatAll(self, times, media='all', strains='all', aligned=False, dtype='OD', scale=False, subtractBackground=False):
+    def timeStatAll(self, times, media='all', strains='all', xstat='time', dtype='OD', scale=False, subtractBackground=False):
         df=pd.DataFrame()
         if scale != False:
             maxdf=self.extractallinfonew(excludeNull=True) #extract all info to get maxima.
@@ -1810,13 +1794,9 @@ class accesspr:
         for j in range(0, np.size(self.allConditions,0)):
             if self.allConditions.values[j,1]=='null':
                 continue
-            try:
-                if aligned==True:
-                    df=pd.concat([df, self.timeStatAligned(self.allConditions.values[j,0],self.allConditions.values[j,1], times, dtype=dtype)])
-                if aligned==False:
-                        df=pd.concat([df, self.timeStat(self.allConditions.values[j,0],self.allConditions.values[j,1], times, dtype=dtype, scale=scale, max=mx)])
-            except:
-                print('condition ', self.allConditions.values[j,1], ' in ' ,self.allConditions.values[j,0], 'showed extraction problems.')
+            df=pd.concat([df, self.timeStat(media=self.allConditions.values[j,0],strain=self.allConditions.values[j,1], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
+            #except:
+            #    print('condition ', self.allConditions.values[j,1], ' in ' ,self.allConditions.values[j,0], 'showed extraction problems.')
         df.index= range(0,np.size(df,0))
         if media !='all': #if media subset is entered then filter dataframe by that subset
             df=DFsubset(df, 'media', media)
@@ -1824,7 +1804,7 @@ class accesspr:
             df=DFsubset(df, 'strain', strains)
         return df
         
-    def timeStat(self, media, strain, times= [4], dtype='OD', includeMediaStrain=True, scale=False, max=False, subtractBackground=False, background=False ):
+    def timeStat(self, media, strain, times= [4], dtype='OD', includedescriptors=True, scale=False, max=False, subtractBackground=False, background=False, xstat='time' ):
         '''
         df=timeStat(self, media, strain, times=[4], dtype='FLperod', includeMediaStrain=True):
         Generates a dataframe where columns are media, strain and the values of dtype at times (one column per element in times).
@@ -1833,42 +1813,50 @@ class accesspr:
         '''
         self.containssetup(media,strain, strict=False) #finding the experiments with a given media and strain
         expts=self.containslist ##here are the compliant experiments.
-        isWithinBound= [j<=xpr.interpLimit for j in times] ###true or false array saying 
+        formatlist=lambda t: [t] if np.size(t)==1 else t
+        formatval=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, int) else np.array(t)
+        cols= ['experiment','machine','media', 'strain']+ formatlist(times)
+        isWithinBound= np.array([j<=self.interpLimit for j in formatval(times)]) ###true or false array saying 
+        print(type(isWithinBound))
         #whether the times fall within the length of the shortest experiment
         if np.size(np.where(isWithinBound==False))>0: #warn that times out of the bound will be excluded.
             print('Warning: times above ', self.interpLimit, ' are being excluded')
-        times= list(np.array(times)[isWithinBound]) ###we immediately get rid of the times outside the duration of the shortest experiment.
-        
-        if includeMediaStrain==True: ##whether the user wants to iinclude the media and strain columns
-            fin=pd.DataFrame( columns= ['experiment','machine','media', 'strain']+ times) #preparing the output dataframe with media and strain
+        ###we immediately get rid of the times outside the duration of the shortest experiment.
+        times=formatval(times)
+        [isWithinBound]
+        if includedescriptors==True: ##whether the user wants to iinclude the media and strain columns
+            fin=pd.DataFrame( columns=cols) #preparing the output dataframe with media and strain
         else:
             fin=pd.DataFrame( columns= times) #preparing the output dataframe w/o media and strain
         for j in range(0, np.size(expts)): ##loop through experiment names
-            if np.ndim( self.data[expts[j]].d[media][strain][dtype])>1:
-                datavals= self.data[expts[j]].d[media][strain][dtype].mean(1)
-            else:
-                datavals=self.data[expts[j]].d[media][strain][dtype]
-            if subtractBackground==True: ##if the user wants to subtract a minimum value of the signal
-                if background == False: ##if no general minimum is given we use the minimum level of the signal
-                    background= np.min(datavals)
-            else:#if subtraction of the minimum is not needed we make background 0.
-                background=0
-            datavals=datavals-background #whatever the value of background is at this point, we subtract it from the signal datavals.
-            if scale==True: ##if the user wants to scale the response relative to a maximum
-                if max != False: ##if no general maximum is given we use the maximum level in the signal
-                    f = scint.interp1d(self.data[expts[j]].d[media][strain]['time'],  datavals/max) #create interpolation function
-                else:#if a max is given we divide the signal by it.
-                    f = scint.interp1d(self.data[expts[j]].d[media][strain]['time'],  datavals/np.max(datavals) ) #create interpolation function
-            else: #if scaling is not required then we just proceed with the original time series.
-                f = scint.interp1d(self.data[expts[j]].d[media][strain]['time'],  datavals) #create interpolation function
-            if includeMediaStrain==True: # add media and strain if required
+            #print(expts[j])
+            try:
+                if np.ndim( self.data[expts[j]].d[media][strain][dtype])>1:
+                    datavals= self.data[expts[j]].d[media][strain][dtype].mean(1)
+                else:
+                    datavals=self.data[expts[j]].d[media][strain][dtype]
+                if subtractBackground==True: ##if the user wants to subtract a minimum value of the signal
+                    if background == False: ##if no general minimum is given we use the minimum level of the signal
+                        background= np.min(datavals)
+                else:#if subtraction of the minimum is not needed we make background 0.
+                    background=0
+                datavals=datavals-background #whatever the value of background is at this point, we subtract it from the signal datavals.
+                if scale==True: ##if the user wants to scale the response relative to a maximum
+                    if max != False: ##if no general maximum is given we use the maximum level in the signal
+                        f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/max) #create interpolation function
+                    else:#if a max is given we divide the signal by it.
+                        f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/np.max(datavals) ) #create interpolation function
+                else: #if scaling is not required then we just proceed with the original time series.
+                    f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals) #create interpolation function
+                fin.loc[j,times]= f(times) #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
+            except:
+                print('Something went wrong with extraction of '+expts[j] )		
+            if includedescriptors==True: # add media and strain if required
                 fin.loc[j,'experiment']= expts[j]
                 fin.loc[j,'machine']=self.machines[self.containslist[j]]
                 fin.loc[j,'media']= media
                 fin.loc[j,'strain']= strain
-            fin.loc[j,times]= f(times) #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
-        return fin
-        
+        return fin        
     def replicateLocations(self):
         if not self.allConditions.empty:
             daf=pd.DataFrame(index=[self.allConditions['strain'], self.allConditions['media']], columns=self.allexperiments)
@@ -1989,7 +1977,47 @@ class accesspr:
             #except ValueError:
             #print('Error: interpolation time out of bounds. please screen for time discrepancies')
         return finalDict
-    def interptimesnew(self, replicateMatrix=False, dtype='OD', centeringVariable='time', descriptors=False):    
+    def makedataframe(self, type='notime', times=False, dtype='OD', xstat='time', conditionsDF=False):
+        ''' makedataframe(self, type='notime', times=False, dtype='OD', xstat='time')
+        Exports a dataframe with data in 3 different formats:
+        type= the format of the dataframe to be exported. three possible types:
+            'notime'.-  point statistics for each replicate in the experiments. anything that can be exported will be exported.
+            Interpolated time statistics: statistics sampled at equivalent times across experiments and replicates...
+            'timecol'.- specify timpepoints times and get statistic dtype evaluated at points times of  variable xstat (defaults to times)
+            times vector must be specified. each  is a replicate and columns are descriptor variables of such replicates an the values at times times.
+        'timerow'.-  retrieve a dataframe of time traces (in rows) of data type dtype, each column being a different time series. times can be specified to retrieve specific points but it is not necessary.
+        times.- the times at which extract the value of xstat for each replicate when using type timerow and timecol
+        xstat= the time varying statistic that serves as a reference for interpolation. defaults to time.
+            other potential options for it are 'Time centered at gr peak' for aligned values, or other time driven variables like OD for example, as long as there is one per
+            condition.
+        '''
+        if not isinstance(conditionsDF, pd.DataFrame):
+            conditionsDF=self.allReplicates
+        if type=='notime':
+            df=self.extractallinfonew()
+        if type=='timecol':
+            if not isinstance(times, (int, list, np.ndarray)):
+                raise ValueError('For timerow please provide a list of times at which to extract data: times=[x1, x2, x3].')
+            else:
+                df= self.timeStatAll(times=times, dtype=dtype, xstat=xstat)
+        if type=='timerow':
+            if not isinstance(times, (int, list, np.ndarray)):
+                raise ValueError('For timerow please provide a list of times at which to extract data: times=[x1, x2, x3].')
+            alldtypes= formatlist(dtype)
+            df=pd.DataFrame();
+            c=1;
+            for j in alldtypes:
+                if c==1 and not isinstance(times, (int, list, np.ndarray)):
+                    interpolated=self.interptimesnew(replicateMatrix=conditionsDF, dtype=j, centeringVariable=xstat)
+                    times= interpolated['time']
+                    df=pd.DataFrame(interpolated[dtype],index=times, columns=inerpolated['names'])
+                else:
+                    interpolated=self.interptimesnew(replicateMatrix=conditionsDF, dtype=j, centeringVariable=xstat, xvals=times)
+                    df=pd.concat([df, pd.DataFrame(interpolated[j],index=interpolated[xstat], columns=interpolated['names'])], axis=1)
+                
+                c+=1
+        return df
+    def interptimesnew(self, replicateMatrix=False, dtype='OD', centeringVariable='time', descriptors=False, xvals=False):    
         '''
         interpTimes(self, media, strain, dtype='OD', centeringVariable='time')   
         interpolate all replicates across the same time scale.
@@ -1998,32 +2026,47 @@ class accesspr:
         centeringVariable: the variable used for the x axis
         descriptors: the final object will contain full descriptor factors for each condition:  expt, media, strain, plateloc
         '''
+        replicateMatrix=replicateMatrix[replicateMatrix['strain']!='null'] ###removing annoying nulls!!! which should have nans in all values yet they don't because.
+        replicateMatrix=replicateMatrix.reindex()
         interpRange=[]
         maxLengths=[]
         startPoints=[]
+        removelist=[]
         adjustedTimes=dict()
         adjustedTimes[dtype]=[] #working with ordered lists
         adjustedTimes[centeringVariable]=[] #working with ordered lists
         for j in range(0, np.size(replicateMatrix, 0)): ###retireving the limiting values for the interpolation amongst all experiments.
-            expt, media, strain=replicateMatrix.values[j, [0,1,2]]
-            maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
-            startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
+            try:
+                expt, media, strain=replicateMatrix.values[j, [0,1,2]]
+                print(expt+' '+media+' '+strain)
+                maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
+                startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
+            except:
+                print('problem measuring length of data trace. '+centeringVariable+' may not exist for '+expt+' '+media+' '+strain+'\n excluding expriment '+expt)
+                removelist.append(expt)
+        removelist=np.unique(removelist)
+        #for j in removelist:
+        #    replicateMatrix=replicateMatrix[replicateMatrix['experiment']!=j] 
         interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
+        print('setting interpolation limit with new information')
+        self.interpLimit=np.min(np.array(maxLengths))
         func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
         namesarray=[]
         exptsarray=[]
         mediaarray=[]
         strainsarray=[]
         platelocarray=[]
+        dtypearray=[]
         for j in range(0, np.size(replicateMatrix, 0)):
             #print('processing replicate number', j)
             expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
-            namesarray.append(expt+' '+media+' '+strain+' '+' '+plateloc)
+            namesarray.append(expt+' '+media+' '+strain+' '+' '+plateloc+ ' '+ dtype)
             if descriptors==True:
                 exptsarray.append(expt)
                 mediaarray.append(media)
                 strainsarray.append(strain)
                 platelocarray.append(plateloc)
+                dtypearray.append(dtype)
             #finding the points that fit the range
             fitPoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
             #print(np.shape(self.data[expt]. d[media][strain][dtype])[1])
@@ -2040,20 +2083,23 @@ class accesspr:
                 adjustedTimes[dtype].append(self.data[expt].d[media][strain][dtype][fitPoints])
             adjustedTimes[centeringVariable].append(np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2))
         finalDict={};
-        finalDict[dtype]=np.empty([np.size(adjustedTimes[centeringVariable][0]), len(adjustedTimes[dtype])], dtype=None)
-        finalDict[centeringVariable]=np.around(adjustedTimes[centeringVariable][0],2) #arbitrarily taking the times of the first condition as a reference
+        if not isinstance(xvals, (int,float, list, np.ndarray)): #if it is not a boolean
+            xvals=np.around(adjustedTimes[centeringVariable][0],2)  #arbitrarily taking the times of the first condition as a reference
+        finalDict[dtype]=np.empty([np.size(xvals), len(adjustedTimes[dtype])], dtype=None)
+        finalDict[centeringVariable]= np.array(xvals)
         for j in range(0, len(adjustedTimes[dtype])): 
             try:
                 fint=scint.interp1d(adjustedTimes[centeringVariable][j],adjustedTimes[dtype][j]) #interpolate times j and response j
-                finalDict[dtype][:, j]=fint(finalDict[centeringVariable])
+                finalDict[dtype][:, j]=fint(xvals)
             except:
-                finalDict[dtype][:, j]=np.empty([np.size(finalDict[centeringVariable],0)])*np.nan
+                finalDict[dtype][:, j]=np.empty([np.size(xvals)])*np.nan
         finalDict['names']=namesarray
         if descriptors==True:
             finalDict['experiment']=exptsarray
             finalDict['media']=mediaarray
             finalDict['strain']=strainsarray
             finalDict['plateloc']=platelocarray
+            finalDict['dtype']=dtypearray
         return finalDict
 
     def addLegend(self, strains=False, media=False, strainColors=False, mediaColors=False):
