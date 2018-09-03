@@ -1157,6 +1157,9 @@ class accesspr:
                     percentage=percentage+ 1/np.size(cl, 0)
                     #print(percentage)
                     self.statcontents.loc[key, stat]=percentage
+                else:
+                    if stat=='gr': #in the special case that we are dealing with gr, we really want to know if it is 0.
+                        self.statcontents.loc[key, stat]=0
                     if printstats==True:
                         print(self.statcontents)
     #def backup(self):
@@ -1328,7 +1331,7 @@ class accesspr:
         plt.xlabel('OD of null')
         plt.ylabel('FL of null')
         createFigLegend(dic=exptColors)
-    def getstats(self, experiments='all', media='all', strain='all', dtype='OD', rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5):
+    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', rewrite=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
         statistical analysis have run odstats().
@@ -1336,14 +1339,20 @@ class accesspr:
         access the full power of the plate reader data.
         Overwrites existing pickle files.
         '''
-        
+        #if isinstance(replicateDF, pd.DataFrame)
+        #    try:
+        #        expt, media, strain, plateloc= replicateDF.values[j]
+        #    except:
+        #        expt, media, strain= replicateDF.values[j]
         #print "Fitting requested ODs for experiments"
         if experiments=='all':
             experiments = self.data.keys()
         if type(experiments)==str and experiments != 'all':
             experiments=[experiments]
+        print('Performing non-parametric fitting of growth statistics using gaussian processes.\n')
         for key in experiments: 
-            if self.statcontents.loc[key, 'gr']==1 and dtype=='OD' and rerun==False:
+            print('...\nExperiment', key, ':\n')
+            if self.statcontents.loc[key, 'gr']>.95 and dtype=='OD' and rerun==False:
                 print('Experiment ', key, ' already contains gr')
                 continue
             #if self.statcontents.loc[key, 'd/dt FLperod']==1 and dtype==['FLperod'] and rerun==False:
@@ -1785,7 +1794,7 @@ class accesspr:
     def timeStatAll(self, times, media='all', strains='all', aligned=False, dtype='OD', scale=False, subtractBackground=False):
         df=pd.DataFrame()
         if scale != False:
-            maxdf=self.extractAllInfoNew(excludeNull=True) #extract all info to get maxima.
+            maxdf=self.extractallinfonew(excludeNull=True) #extract all info to get maxima.
             if media !='all': #if media subset is entered then filter dataframe by that subset
                 maxdf=DFsubset(maxdf, 'media', media)
             if strains !='all':#if strain subset is entered then filter dataframe by that subset
@@ -1817,18 +1826,18 @@ class accesspr:
         
     def timeStat(self, media, strain, times= [4], dtype='OD', includeMediaStrain=True, scale=False, max=False, subtractBackground=False, background=False ):
         '''
-        df=timeStat(self, media, strain, times=[0], dtype='FLperod', includeMediaStrain=True):
+        df=timeStat(self, media, strain, times=[4], dtype='FLperod', includeMediaStrain=True):
         Generates a dataframe where columns are media, strain and the values of dtype at times (one column per element in times).
         and and each row is the value of dtype at those times for one replicate. 
         The times are absolute from the beginning of each experiment. Default is at 4 hrs.
         '''
         self.containssetup(media,strain, strict=False) #finding the experiments with a given media and strain
         expts=self.containslist ##here are the compliant experiments.
-        isWithinBound= times<= self.interpLimit ###true or false array saying 
+        isWithinBound= [j<=xpr.interpLimit for j in times] ###true or false array saying 
         #whether the times fall within the length of the shortest experiment
         if np.size(np.where(isWithinBound==False))>0: #warn that times out of the bound will be excluded.
             print('Warning: times above ', self.interpLimit, ' are being excluded')
-        times= list(np.array(times)[times<= self.interpLimit]) ###we immediately get rid of the times outside the duration of the shortest experiment.
+        times= list(np.array(times)[isWithinBound]) ###we immediately get rid of the times outside the duration of the shortest experiment.
         
         if includeMediaStrain==True: ##whether the user wants to iinclude the media and strain columns
             fin=pd.DataFrame( columns= ['experiment','machine','media', 'strain']+ times) #preparing the output dataframe with media and strain
