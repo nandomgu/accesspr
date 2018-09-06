@@ -2043,7 +2043,7 @@ class accesspr:
                 startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
             except:
                 print('problem measuring length of data trace. '+centeringVariable+' may not exist for '+expt+' '+media+' '+strain+'\n excluding expriment '+expt)
-                removelist.append(expt)
+        removelist.append(expt)
         removelist=np.unique(removelist)
         #for j in removelist:
         #    replicateMatrix=replicateMatrix[replicateMatrix['experiment']!=j] 
@@ -2083,7 +2083,7 @@ class accesspr:
                 adjustedTimes[dtype].append(self.data[expt].d[media][strain][dtype][fitPoints])
             adjustedTimes[centeringVariable].append(np.around(self.data[expt].d[media][strain][centeringVariable][fitPoints],2))
         finalDict={};
-        if not isinstance(xvals, (int,float, list, np.ndarray)): #if it is not a boolean
+        if isinstance(xvals, (bool)): #if it is not a boolean
             xvals=np.around(adjustedTimes[centeringVariable][0],2)  #arbitrarily taking the times of the first condition as a reference
         finalDict[dtype]=np.empty([np.size(xvals), len(adjustedTimes[dtype])], dtype=None)
         finalDict[centeringVariable]= np.array(xvals)
