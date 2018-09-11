@@ -93,7 +93,7 @@ class platereader:
         standardgain: if defined, fluorescence measurements are corrected to this gain
         ignorestrains: a list of strains in particular conditions to be ignored, such as ['GAL10 in 0.1% Gal']
         '''
-        self.version= '4.81'
+        self.version= '4.84'
         self.dsheetnumber= dsheetnumber
         self.asheetnumber= asheetnumber
         if '.' not in dname: dname += '.xlsx'
@@ -367,11 +367,11 @@ class platereader:
                         # all wells for a condition and strain have been ignored
                         self.ignored.append(s + ' in ' + c)
                     elif S[c][s][dn].shape[1] > 1:
-                        S[c][s][dn + 'mn']= np.mean(S[c][s][dn], 1)
-                        S[c][s][dn + 'var']= np.var(S[c][s][dn], 1)
+                        S[c][s][dn + ' mean']= np.mean(S[c][s][dn], 1)
+                        S[c][s][dn + ' var']= np.var(S[c][s][dn], 1)
                     else:
-                        S[c][s][dn + 'mn']= gu.makerow(S[c][s][dn])
-                        S[c][s][dn + 'var']= np.zeros(len(S[c][s][dn]))
+                        S[c][s][dn + ' mean']= gu.makerow(S[c][s][dn])
+                        S[c][s][dn + ' var']= np.zeros(len(S[c][s][dn]))
         if self.ignored:
             self.ignored= list(np.unique(self.ignored))
             for igns in self.ignored:
@@ -727,11 +727,13 @@ class platereader:
             plt.ylim([0, 1.05*np.max(od)])
             plt.gca().set_aspect('equal', adjustable='box')
             plt.draw()
+            plt.grid(True)
             plt.xlabel('OD')
             plt.ylabel('relative cell density')
             plt.title('function for correcting OD')
             plt.show(block= False)
         self.gc= gc
+
 
 
     #####
@@ -944,7 +946,7 @@ class platereader:
                     for i in range(noreps):
                         # interpolate WT fluorescence errors to OD values of strain
                         from scipy.interpolate import interp1d
-                        interpf= interp1d(S[c][refstrain]['ODmn'], S[c][refstrain]['fmerr for ' + f[0]])
+                        interpf= interp1d(S[c][refstrain]['OD mean'], S[c][refstrain]['fmerr for ' + f[0]])
                         try:
                             men= interpf(S[c][s]['OD'][:,i])
                         except ValueError:
@@ -969,9 +971,9 @@ class platereader:
                             flperod2 += dperod**2
                     bname= 'c-' + f[0]
                     S[c][s][bname]= fl/(noreps*nosamples)
-                    S[c][s][bname + 'var']= fl2/(noreps*nosamples) - S[c][s][bname]**2
+                    S[c][s][bname + ' var']= fl2/(noreps*nosamples) - S[c][s][bname]**2
                     S[c][s][bname + 'perod']= flperod/(noreps*nosamples)
-                    S[c][s][bname + 'perodvar']= flperod2/(noreps*nosamples) - S[c][s][bname + 'perod']**2
+                    S[c][s][bname + 'perod var']= flperod2/(noreps*nosamples) - S[c][s][bname + 'perod']**2
             self.autocorrected[c + ' for ' + f[0]]= True
         print('Created:\n' + '\tc-' + f[0] + 'perod (corrected fluorescence per cell)\n' + '\tc-' + f[0]
               + ' (corrected fluorescence)')
@@ -1079,33 +1081,33 @@ class platereader:
                     varfl /= self.nosamples
                     bname= 'c-' + f[0]
                     S[c][s][bname]= np.mean(fl,1)
-                    S[c][s][bname + 'var']= varfl
+                    S[c][s][bname + ' var']= varfl
                     # fluorescence per cell
-                    S[c][s][bname + 'perod']= S[c][s][bname]/S[c][s]['ODmn']
+                    S[c][s][bname + 'perod']= S[c][s][bname]/S[c][s]['OD mean']
                     flperodvar= np.zeros(nodata)
                     for i in np.random.randint(noreps, size= self.nosamples):
                         if correctOD:
                             self.gc.predict(S[c][s]['OD'][:,i])
                             cc= self.gc.sample(1)
                             cc= cc.flatten('F')
-                            flperodvar += S[c][s][bname + 'var']/cc**2
+                            flperodvar += S[c][s][bname + ' var']/cc**2
                         else:
-                            flperodvar += S[c][s][bname + 'var']/S[c][s]['OD'][:,i]**2
+                            flperodvar += S[c][s][bname + ' var']/S[c][s]['OD'][:,i]**2
                     flperodvar /= self.nosamples
-                    S[c][s][bname + 'perodvar']= flperodvar
+                    S[c][s][bname + 'perod var']= flperodvar
                     # calculate corrected levels that are above the expectation from reference strain
-                    reflevel= self.consist*np.sqrt(S[c][refstrain][bname + 'var'])
+                    reflevel= self.consist*np.sqrt(S[c][refstrain][bname + ' var'])
                     keep= np.nonzero(S[c][s][bname] > reflevel)[0]
                     S[c][s]['s' + bname]= np.zeros(np.size(S[c][s][bname]))
                     S[c][s]['s' + bname][keep]= S[c][s][bname][keep]
-                    S[c][s]['s' + bname + 'var']= np.zeros(np.size(S[c][s][bname + 'var']))
-                    S[c][s]['s' + bname + 'var'][keep]= S[c][s][bname + 'var'][keep]
-                    reflevel /= S[c][refstrain]['ODmn']
+                    S[c][s]['s' + bname + ' var']= np.zeros(np.size(S[c][s][bname + ' var']))
+                    S[c][s]['s' + bname + ' var'][keep]= S[c][s][bname + ' var'][keep]
+                    reflevel /= S[c][refstrain]['OD mean']
                     keep= np.nonzero(S[c][s][bname+ 'perod'] > reflevel)[0]
                     S[c][s]['s' + bname + 'perod']= np.zeros(np.size(S[c][s][bname + 'perod']))
                     S[c][s]['s' + bname + 'perod'][keep]= S[c][s][bname + 'perod'][keep]
-                    S[c][s]['s' + bname + 'perodvar']= np.zeros(np.size(S[c][s][bname + 'perodvar']))
-                    S[c][s]['s' + bname + 'perodvar'][keep]= S[c][s][bname + 'perodvar'][keep]
+                    S[c][s]['s' + bname + 'perod var']= np.zeros(np.size(S[c][s][bname + 'perod var']))
+                    S[c][s]['s' + bname + 'perod var'][keep]= S[c][s][bname + 'perod var'][keep]
             self.autocorrected[c + ' for ' + f[0]]= True
         print('Created:\n' + '\tc-' + f[0] + 'perod (corrected fluorescence per cell)\n' + '\tc-' + f[0]
               + ' (corrected fluorescence)\n' + '\tsc-' + f[0]
@@ -1191,15 +1193,15 @@ class platereader:
                                               S[c][refstrain][f[1]])
             bname= 'c-' + f[0]
             S[c][refstrain][bname]= np.mean(flref, 1)
-            S[c][refstrain][bname + 'perod']= np.mean(flref/S[c][refstrain]['ODmn'][:,None], 1)
-            S[c][refstrain][bname + 'var']= np.var(flref, 1)
-            S[c][refstrain][bname + 'perodvar']= np.var(flref/S[c][refstrain]['ODmn'][:,None], 1)
+            S[c][refstrain][bname + 'perod']= np.mean(flref/S[c][refstrain]['OD mean'][:,None], 1)
+            S[c][refstrain][bname + ' var']= np.var(flref, 1)
+            S[c][refstrain][bname + 'perod var']= np.var(flref/S[c][refstrain]['OD mean'][:,None], 1)
             if figs:
                 # plot correction for reference strain
                 plt.figure()
                 plt.plot(S[c][refstrain]['time'], flref, '.')
-                plt.plot(S[c][refstrain]['time'], self.consist*np.sqrt(S[c][refstrain][bname + 'var']), 'r:')
-                plt.plot(S[c][refstrain]['time'], -self.consist*np.sqrt(S[c][refstrain][bname + 'var']), 'r:')
+                plt.plot(S[c][refstrain]['time'], self.consist*np.sqrt(S[c][refstrain][bname + ' var']), 'r:')
+                plt.plot(S[c][refstrain]['time'], -self.consist*np.sqrt(S[c][refstrain][bname + ' var']), 'r:')
                 plt.plot(S[c][refstrain]['time'], np.zeros(np.size(S[c][refstrain]['time'])), 'k')
                 plt.ylabel('corrected ' + refstrain + ' fluorescence')
                 plt.xlabel('time (hours)')
@@ -1209,8 +1211,8 @@ class platereader:
             for s in self.getstrains('all', c, True):
                 S[c][s]['refstrain']= refstrain
                 if s != refstrain:
-                    S[c][s][bname + 'refstd']= np.sqrt(S[c][refstrain][bname + 'var'])
-                    S[c][s]['refODmn']= S[c][refstrain]['ODmn']
+                    S[c][s][bname + 'refstd']= np.sqrt(S[c][refstrain][bname + ' var'])
+                    S[c][s]['refODmn']= S[c][refstrain]['OD mean']
             self.processedref2[c + ' for ' + f[0]]= True
 
 
@@ -1280,12 +1282,15 @@ class platereader:
         errors: if True, standard deviations over replicates are included for 'mn' dtypes
         '''
         S= self.d
+        fldata= False
         if dtype == 'labels':
             plate= True
             oldparams= list(plt.rcParams["figure.figsize"])
             # make figure bigger
             plt.rcParams["figure.figsize"]= [17,17]
-        if 'c-' in dtype: nonull= True
+        elif 'c-' in dtype:
+            fldata= True
+            nonull= True
         if plate: onefig= True
         if onefig:
             # one figure for all plots
@@ -1295,19 +1300,17 @@ class platereader:
             nlines= 0
             for c in self.getconditions(conditions, False, conditionincludes, conditionexcludes):
                 for s in self.getstrains(strains, c, nonull, strainincludes, strainexcludes):
-                    nlines += S[c][s][self.datatypes[0]].shape[1]
+                    if dtype in S[c][s]:
+                        nlines += S[c][s][dtype].ndim
             # define colour map
             colormap= plt.cm.nipy_spectral
             from cycler import cycler
-            ax.set_prop_cycle(cycler('color', [colormap(i) for i in np.linspace(0, 1, nlines)]))
+            colors= [colormap(i) for i in np.linspace(0, 1, nlines)]
+            ax.set_prop_cycle(cycler('color', colors))
+            icol= 0
         # draw all plots
         for c in self.getconditions(conditions, False, conditionincludes, conditionexcludes):
             for s in self.getstrains(strains, c, nonull, strainincludes, strainexcludes):
-                if 'c-' in dtype and not includeref and 'refstrain' in list(S[c][s].keys()) and s == S[c][s]['refstrain']:
-                    # ignore reference strain for fluorescence data
-                    ignorestrain= True
-                else:
-                    ignorestrain= False
                 if plate:
                     # plot as a whole plate
                     i= 0
@@ -1333,59 +1336,66 @@ class platereader:
                         for j, k in enumerate(np.arange(1, 96, 12)):
                             if sindex == k: plt.ylabel('ABCDEFGH'[j] + ' ', rotation= 0)
                 else:
-                    # plot data (not whole plate)
-                    if 'c-' in dtype:
-                        # plotting processed data
-                        if not ignorestrain:
-                            if not onefig: plt.figure()
-                            ax= plt.subplot(1,1,1)
-                            ax.plot(S[c][s]['time'], S[c][s][dtype], '.', label= s + ' in ' + c)
-                            ax.plot(S[c][s]['time'], S[c][s][dtype]+np.sqrt(S[c][s][dtype+'var']), 'k:', alpha=0.4)
-                            ax.plot(S[c][s]['time'], S[c][s][dtype]-np.sqrt(S[c][s][dtype+'var']), 'k:', alpha=0.4)
-                            rname= 'c-' + dtype.split('-')[1].split('perod')[0]
-                            if rname + 'refstd' in S[c][s]:
-                                if 'perod' in dtype:
-                                    ax.plot(S[c][s]['time'], self.consist*S[c][s][rname + 'refstd']/S[c][s]['refODmn'], 'r:')
-                                else:
-                                    ax.plot(S[c][s]['time'], self.consist*S[c][s][rname + 'refstd'], 'r:')
-                            if plotod and not onefig:
-                                # add OD to plot
-                                ax2= ax.twinx()
-                                ax2.plot(S[c][s]['time'], S[c][s]['ODmn'] , 'DarkOrange', linewidth=5, alpha=0.2)
+                    if (fldata and not includeref and 'refstrain' in list(S[c][s].keys())
+                        and s == S[c][s]['refstrain']):
+                        # ignore reference strain for fluorescence data
+                        continue
                     else:
-                        # plot raw data
-                        if not onefig: plt.figure()
+                        # plot data (not whole plate)
+                        if not onefig:
+                            plt.figure()
+                            ax= plt.subplot(1,1,1)
                         # remove ignored wells for the legend
                         pls= [well for well in list(S[c][s]['plateloc']) if well not in self.ignoredwells]
-                        # plot each replicate
-                        if S[c][s][dtype].ndim > 1:
-                            for i in range(S[c][s][dtype].shape[1]):
-                                if S[c][s][dtype].shape[1] == 1:
-                                    label= s + ' in ' + c
-                                else:
+                        if not errors and not fldata:
+                            if S[c][s][dtype].ndim > 1:
+                                # plot each replicate
+                                for i in range(S[c][s][dtype].shape[1]):
                                     label= pls[i] + ': ' + s + ' in ' + c
-                                plt.plot(S[c][s]['time'], S[c][s][dtype][:,i], '.-', label= label)
+                                    ax.plot(S[c][s]['time'], S[c][s][dtype][:,i], '.-', label= label)
+                            else:
+                                # plot single replicate
+                                label= s + ' in ' + c
+                                ax.plot(S[c][s]['time'], S[c][s][dtype], '.-', label= label)
                         else:
-                            plt.plot(S[c][s]['time'], S[c][s][dtype], '.-', label= s + ' in ' + c)
-                            if errors and 'mn' in dtype:
-                                sd= np.sqrt(S[c][s][dtype[:-2] + 'var'])
-                                plt.fill_between(S[c][s]['time'], S[c][s][dtype]-sd, S[c][s][dtype]+sd, facecolor= 'b',
-                                                 alpha= 0.2, label= '_nolegend_')
-                if not onefig and not ignorestrain:
-                    # display and add labels for each plot
-                    plt.title(dtype + ' of ' + s + ' in ' + c)
-                    plt.xlabel('time (hours)')
-                    if 'c-' in dtype:
-                        ax.set_ylabel(dtype)
-                        ax2.set_ylabel('mean(OD)')
-                        ax.set_ylim(ymin= 0)
-                        ax2.set_ylim(ymin= 0)
-                    else:
-                        plt.ylabel(dtype)
-                        if len(plt.gca().get_legend_handles_labels()[1]) == len(pls):
-                            plt.legend(pls, loc= 'lower right')
-                        plt.ylim(ymin= 0)
-                    plt.show(block= False)
+                            # plot with errors
+                            var= S[c][s][dtype[:-5] + ' var'] if 'mean' in dtype else S[c][s][dtype + ' var']
+                            if fldata:
+                                # corrected fluorescence
+                                ax.plot(S[c][s]['time'], S[c][s][dtype], '.', label= s + ' in ' + c)
+                                ax.plot(S[c][s]['time'], S[c][s][dtype] + np.sqrt(var), 'k:', alpha=0.4)
+                                ax.plot(S[c][s]['time'], S[c][s][dtype] - np.sqrt(var), 'k:', alpha=0.4)
+                                # add control to fluorescence data
+                                rname= 'c-' + dtype.split('-')[1].split('perod')[0]
+                                if rname + 'refstd' in S[c][s]:
+                                    if 'perod' in dtype:
+                                        ax.plot(S[c][s]['time'], self.consist*S[c][s][rname + 'refstd']/S[c][s]['refODmn'], 'r:')
+                                    else:
+                                        ax.plot(S[c][s]['time'], self.consist*S[c][s][rname + 'refstd'], 'r:')
+                                if plotod and not onefig:
+                                    # add OD to plot
+                                    ax2= ax.twinx()
+                                    ax2.plot(S[c][s]['time'], S[c][s]['OD mean'] , 'DarkOrange', linewidth=5, alpha=0.2)
+                            else:
+                                # everything else
+                                ax.errorbar(S[c][s]['time'], S[c][s][dtype], np.sqrt(var), fmt= '.',
+                                            color= colors[icol], capsize= 0, label= s + ' in ' + c)
+                                icol += 1
+                    if not onefig:
+                        # display and add labels for each plot
+                        plt.title(dtype + ' of ' + s + ' in ' + c)
+                        plt.xlabel('time (hours)')
+                        if fldata:
+                            ax.set_ylabel(dtype)
+                            ax2.set_ylabel('mean(OD)')
+                            ax.set_ylim(ymin= 0)
+                            ax2.set_ylim(ymin= 0)
+                        else:
+                            plt.ylabel(dtype)
+                            if len(plt.gca().get_legend_handles_labels()[1]) == len(pls):
+                                plt.legend(pls, loc= 'lower right')
+                            plt.ylim(ymin= 0)
+                        plt.show(block= False)
         if onefig:
             # display and add labels for single figure
             if plate:
@@ -1444,7 +1454,7 @@ class platereader:
     #####
     # Statistical analysis
     #####
-    def getstats(self, dtype= 'OD', conditions= 'all', strains= 'all', bd= False, cvfn= 'sqexp',
+    def getstats(self, dtype= 'OD', conditions= 'all', strains= 'all', bd= False, cvfn= 'matern',
                  esterrs= False, noruns= 5, stats= True, plotodgr= False, conditionincludes= False,
                  strainincludes= False, conditionexcludes= False, strainexcludes= False,
                  keysmessage= True, figs= True, nosamples= 100):
@@ -1460,7 +1470,7 @@ class platereader:
         conditions: list of experimental conditions to be included
         strains: list of strains to be included
         bd: can be used to change the limits on the hyperparameters for the Gaussian process used for the fit. For example, p.odstats('1% Gal', 'GAL2', bd= {1: [-2,-2])}) fixes the flexibility to be 0.01
-        cvfn: covariance function used for fit, either 'sqexp' (default) or 'nn' or 'matern' or, for example, 'sqexp : matern' to pick the covariance function with the highest maximum likelihood
+        cvfn: covariance function used for fit, either 'matern' (default) or 'sqexp' or 'nn' or, for example, 'sqexp : matern' to pick the covariance function with the highest maximum likelihood
         esterrs: if True, measurement errors are empirically estimated from the variance across replicates at each time point; if False, the size of the measurement error is fit from the data assuming that this size is the same at all time points
         noruns: number of attempts made for each fit (default is 5), each run is made with random initial estimates of the parameters
         stats: calculate statistics if True
@@ -1482,12 +1492,12 @@ class platereader:
                 try:
                     d= S[c][s][dtype]
                     if dtype == 'OD':
-                        snames= ['max growth rate', 'time of max growth rate',
+                        snames= ['max gr', 'time of max gr',
                                     'doubling time', 'max OD', 'lag time']
-                        ylabels= ['log(OD)', 'growth rate']
+                        ylabels= ['log(OD)', 'gr']
                         logs= True
                     else:
-                        esterrs= S[c][s][dtype + 'var']
+                        esterrs= S[c][s][dtype + ' var']
                         snames= ['max derivative of ' + dtype,
                                  'time of max derivative of ' + dtype,
                                  'inverse of max derivative of ' + dtype,
@@ -1535,11 +1545,11 @@ class platereader:
                                         (np.exp(f.f + np.sqrt(f.fvar)) - np.exp(f.f - np.sqrt(f.fvar)))/2.0,
                                         np.sqrt(f.dfvar), 'OD', 'growth rate', figtitle + ' : growth rate vs OD')
                         S[c][s]['flogOD']= f.f
-                        S[c][s]['flogODvar']= f.fvar
+                        S[c][s]['flogOD var']= f.fvar
                         S[c][s]['gr']= f.df
-                        S[c][s]['grvar']= f.dfvar
-                        S[c][s]['d/dtgr']= f.ddf
-                        S[c][s]['d/dtgrvar']= f.ddfvar
+                        S[c][s]['gr var']= f.dfvar
+                        S[c][s]['d/dt gr']= f.ddf
+                        S[c][s]['d/dt gr var']= f.ddfvar
                         # extra statistics for OD
                         fs, gs, hs= f.sample(nosamples)
                         # log2 OD ratio
@@ -1555,15 +1565,15 @@ class platereader:
                                 da.append(np.max(gsample[tpts]))
                                 dt.append(f.t[tpts[np.argmax(gsample[tpts])]])
                         if np.any(da):
-                            S[c][s]['local max growth rate']= np.mean(da)
-                            S[c][s]['local max growth rate var']= np.var(da)
-                            S[c][s]['time of local max growth rate']= np.mean(dt)
-                            S[c][s]['time of local max growth rate var']= np.var(dt)
+                            S[c][s]['local max gr']= np.mean(da)
+                            S[c][s]['local max gr var']= np.var(da)
+                            S[c][s]['time of local max gr']= np.mean(dt)
+                            S[c][s]['time of local max gr var']= np.var(dt)
                         else:
-                            S[c][s]['local max growth rate']= np.nan
-                            S[c][s]['local max growth rate var']= np.nan
-                            S[c][s]['time of local max growth rate']= np.nan
-                            S[c][s]['time of local max growth rate var']= np.nan
+                            S[c][s]['local max gr']= np.nan
+                            S[c][s]['local max gr var']= np.nan
+                            S[c][s]['time of local max gr']= np.nan
+                            S[c][s]['time of local max gr var']= np.nan
                         # find area under gr vs OD
                         from scipy import integrate, interpolate
                         da, dna= [], []
@@ -1580,13 +1590,14 @@ class platereader:
                         S[c][s]['normalized area under gr vs OD var']= np.var(dna)
                     else:
                         S[c][s]['f' + dtype]= f.f
-                        S[c][s]['f' + dtype + 'var']= f.fvar
+                        S[c][s]['f' + dtype + ' var']= f.fvar
                         S[c][s]['d/dt' + dtype]= f.df
-                        S[c][s]['d/dt' + dtype + 'var']= f.dfvar
+                        S[c][s]['d/dt' + dtype + ' var']= f.dfvar
                         S[c][s]['d2/dt2' + dtype]= f.ddf
-                        S[c][s]['d2/dt2' + dtype + 'var']= f.ddfvar
+                        S[c][s]['d2/dt2' + dtype + ' var']= f.ddfvar
                     S[c][s][dtype + ' logmaxlike']= f.logmaxlike
                     S[c][s][dtype + ' gp']= cvfn
+                    S[c][s][dtype + '_GP']= f
                     if stats:
                         for sname in f.ds.keys(): S[c][s][sname]= f.ds[sname]
                 except KeyError:
@@ -1597,57 +1608,66 @@ class platereader:
                 self.datavariables(individual= True, conditions= c, strains= s, title= False)
 
     #####
-    def comparegrarea(self, ref, com, figs= True):
+    def getfitnesspenalty(self, ref, com, figs= True, nosamples= 100):
         '''
         Calculates the area between two growth rate versus OD curves, normalized by the length
         along the OD-axis where they overlap:
 
-        e.g. p.comparegrarea(['1.9% Raffinose 0.0µg/ml cycloheximide', '77.WT'],
+        e.g. p.getfitnesspenalty(['1.9% Raffinose 0.0µg/ml cycloheximide', '77.WT'],
                              ['1.9% Raffinose 0.5µg/ml cycloheximide', '77.WT'])
 
         Arguments
         --
         ref: [condition, strain] array for the reference
         com: [condition, strain] array to compare to the reference
+        figs: if True, an example of the area between the curves is shown
+        nosamples: for the bootstraps to estimate error (default: 100)
         '''
-        # extract data
-        od0= np.exp(self.d[ref[0]][ref[1]]['flogOD'])
-        gr0= self.d[ref[0]][ref[1]]['gr']
-        od1= np.exp(self.d[com[0]][com[1]]['flogOD'])
-        gr1= self.d[com[0]][com[1]]['gr']
-        # remove any double values because of OD plateau'ing
-        from scipy.signal import argrelextrema
-        imax= argrelextrema(od0, np.greater)[0]
-        if np.any(imax):
-            od0= od0[:imax[0]]
-            gr0= gr0[:imax[0]]
-        imax= argrelextrema(od1, np.greater)[0]
-        if np.any(imax):
-            od1= od1[:imax[0]]
-            gr1= gr1[:imax[0]]
-        # interpolate data
-        from scipy import interpolate
-        i0= interpolate.interp1d(od0, gr0)
-        i1= interpolate.interp1d(od1, gr1)
-        # find common OD range
-        odinit= np.max([od0[0], od1[0]])
-        odfin= np.min([od0[-1], od1[-1]])
-        if figs:
-            plt.figure()
-            plt.plot(od0, gr0, 'k-', od1, gr1, 'b-')
-            x= np.linspace(odinit, odfin, np.max([len(od0), len(od1)]))
-            plt.fill_between(x, i0(x), i1(x), facecolor= 'red', alpha= 0.5)
-            plt.xlabel('OD')
-            plt.ylabel('growth rate')
-            plt.legend([ref[1] + ' in ' + ref[0], com[1] + ' in ' + com[0]], loc= 'upper left', bbox_to_anchor= (0.5, 1.05))
-            plt.title('area between ' + ref[1] + ' in ' + ref[0] + ' and ' + com[1] + ' in ' + com[0])
-            plt.show(block= False)
-        # perform integration
-        from scipy import integrate
-        igrand= lambda x: i0(x) - i1(x)
-        a= integrate.quad(igrand, odinit, odfin, limit= 100, full_output= 1)[0]
-        # return normalized area between curves
-        return a/(odfin-odinit)
+        fps= np.zeros(nosamples)
+        # get and sample from Gaussian processes
+        try:
+            f0s, g0s, h0s= self.d[ref[0]][ref[1]]['OD_GP'].sample(nosamples)
+            f1s, g1s, h1s= self.d[com[0]][com[1]]['OD_GP'].sample(nosamples)
+        except KeyError:
+            print("Failed: getstats('OD') needs to be run for these strains")
+            return
+        # process samples
+        for j, (f0sample, gr0, f1sample, gr1) in enumerate(zip(np.transpose(f0s), np.transpose(g0s),
+                                                               np.transpose(f1s), np.transpose(g1s))):
+            od0, od1= np.exp(f0sample), np.exp(f1sample)
+            # remove any double values because of OD plateau'ing
+            from scipy.signal import argrelextrema
+            imax= argrelextrema(od0, np.greater)[0]
+            if np.any(imax):
+                od0= od0[:imax[0]]
+                gr0= gr0[:imax[0]]
+            imax= argrelextrema(od1, np.greater)[0]
+            if np.any(imax):
+                od1= od1[:imax[0]]
+                gr1= gr1[:imax[0]]
+            # interpolate data
+            from scipy import interpolate
+            i0= interpolate.interp1d(od0, gr0)
+            i1= interpolate.interp1d(od1, gr1)
+            # find common OD range
+            odinit= np.max([od0[0], od1[0]])
+            odfin= np.min([od0[-1], od1[-1]])
+            # perform integration to find normalized area between curves
+            from scipy import integrate
+            igrand= lambda x: i0(x) - i1(x)
+            fps[j]= integrate.quad(igrand, odinit, odfin, limit= 100, full_output= 1)[0]/(odfin - odinit)
+            # an example figure
+            if figs and j == 1:
+                plt.figure()
+                plt.plot(od0, gr0, 'k-', od1, gr1, 'b-')
+                x= np.linspace(odinit, odfin, np.max([len(od0), len(od1)]))
+                plt.fill_between(x, i0(x), i1(x), facecolor= 'red', alpha= 0.5)
+                plt.xlabel('OD')
+                plt.ylabel('growth rate')
+                plt.legend([ref[1] + ' in ' + ref[0], com[1] + ' in ' + com[0]], loc= 'upper left', bbox_to_anchor= (0.5, 1.05))
+                plt.title('fitness penalty for ' + com[1] + ' in ' + com[0] + ' relative to '+ ref[1] + ' in ' + ref[0])
+                plt.show(block= False)
+        return np.mean(fps), np.var(fps)
 
 
 
@@ -1714,11 +1734,10 @@ class platereader:
                                            strainexcludes= strainexcludes,
                                            nomedia= nomedia, nonull= nonull)
         # remove 'time' from the time-dependent variables
-        variables= np.delete(variables, np.nonzero(variables == 'time')[0][0])
+        if type == 'timecol' or type == 'notime':
+            variables= np.delete(variables, np.nonzero(variables == 'time')[0][0])
         dfIndex= 0
         S= self.d
-        import time
-        start= time.time()
         if type == 'timecol':
             # each row corresponds to a time-
             columns= ['condition', 'strain', 'timepoint'] + list(variables)
@@ -1735,7 +1754,7 @@ class platereader:
             df= pd.concat(dfs)
         elif type == 'timerow':
             # each time-point has its own column
-            columns= ['condition', 'strain', 'variable'] + ['timepoint: ' + str(t + 1)
+            columns= ['condition', 'strain', 'variable'] + ['timepoint: ' + str(t)
                                                             for t in range(len(self.t))]
             allseries= []
             for c, s in both:
@@ -1754,14 +1773,12 @@ class platereader:
             print(type, 'is not recognized')
             return
 
-        end= time.time()
-        print(end-start)
-
         # sort data
         if sortby:
             df= df.sort_values(by= sortby, ascending= ascending).reset_index(drop= True)
         # store result
         setattr(self, dfname, df)
+        print(dfname, 'created')
 
 
 

@@ -747,7 +747,7 @@ class accesspr:
         #activeExperiments is an array the list of currently relevant pickle files meant to be loaded onto memory.
         #this list is modified by contains functions
         self.activeExpts=[];
-        self.version='4.81'
+        self.version='4.84'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
         self.allconditions=pd.DataFrame()
         self.loadInitial()
