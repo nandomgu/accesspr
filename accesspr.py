@@ -141,7 +141,7 @@ def flatten(listoflists):
     flattened = [val for sublist in listoflists for val in sublist]
     return flattened
     
-def colorScatter(p, media, strain, xstat=False, ystat='ODmn', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=100, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=True, vmin=0, vmax=0, xlabel=1,ylabel=1):
+def colorScatter(p, media, strain, xstat=False, ystat='OD mean', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=100, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=True, vmin=0, vmax=0, xlabel=1,ylabel=1):
     if xstat==False:
         xstat='time'
     x=p.d[media][strain][xstat]
@@ -432,11 +432,11 @@ def bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col=
         plt.xlabel(centeringVariable)
         plt.ylabel(dtype)
         final[dtype]=reps
-        final[dtype+'mn']=totalmn
+        final[dtype+' mean']=totalmn
         final[dtype+'bootstrapsd']=totalsd
     else:
         final[dtype]=interpolated[dtype]
-        final[dtype+'mn']=mn
+        final[dtype+' mean']=mn
         final[dtype+'sd']=sd
         plt.plot(obj[centeringVariable], mn, color=col)
         plt.fill_between(obj[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha )
@@ -493,7 +493,9 @@ class accesspr:
     to learn about pandas (especially dataframes) and the seaborn graphics package. 
     
     ***Newest FEATURES***
-    self.allReplicates contains the condition in every well in every experiment
+    self.getvariables() call this to update all variables available at least once i all your experiment colleciton.
+    self.makedataframe() can now extract information robustrly across all experiments in scalar or 2 time formats. 
+    self.allreplicates contains the condition in every well in every experiment
     self.plotReplicateMeanNew() and self.interptimesnew now work with replicate dataframes as an input to include specific replicates
     self.getRawData() creates a raw data dictionary to handle the full pr output altogether.
     ATTRIBUTES:
@@ -533,7 +535,7 @@ class accesspr:
     To interrogate about experiment contents and keep track of experiment processing,
     
         * getAllContents(self):
-             produces self.allConditions attribute (see attributes)
+             produces self.allconditions attribute (see attributes)
              
         * containsstat(self, STAT):
             produces the statcontents attribute (see attributes)
@@ -589,44 +591,6 @@ class accesspr:
                 b)trims experiments so that all have data in a same shared time interval
                 c)performs interpolation using an arbitrary experiment's timepoints. 
 
-        extractRepInfo(self, media, strain)
-            One of the most useful functions in accesspr. 
-            Finds all experiments with replicates for strain in media, and then 
-            returns a pandas dataframe with most single point statistics and string-formatted- time series of each replicate's info. 
-            the statistics deployed and the order (currently fixed) can be found in the self.extractionFields attribute. 
-            To understand the power of having the data in a pandas dataframe, I recommend the following websites:
-            10 minutes to pandas (check out the data frame section)
-                http://pandas.pydata.org/pandas-docs/stable/10min.html
-            plotting directly with pandas
-                http://pandas.pydata.org/pandas-docs/stable/visualization.html
-            
-            for extraction of all experimental conditions present in your accesspr structure, see method extractAllInfo() below.
-            output dataframe Field descriptions: (p- one point statistic. s-array stored in a string)
-                'experiment'(p)-        name of the pickle file containing this replicate
-                'media'(p)-             media identifier string for this replicate
-                'strain'(p)-            strain identifier string for this replicate
-                'InitialOD'(p)-         the raw OD at the first timepoint of the experiment
-                'FinalOD'-(p)           the raw  OD reached at the last timepoint of the experiment
-                'InitialRawFL'(p)-      the mean raw GFP  measure across all within experiment replicates
-                'InitialFLperOD'(p)-    the corrected FLperod at the beginning of the experiment. 
-                'FinalFLperOD'(p), -    the corrected FLperod at the last timepoint of the experiment
-                'FLPeak'(p)       -     the max value of the FLperod reached
-                'FLAbsPeakTime'(p)-     the time (in hrs after the beginning of the experiment) at which the max value of the FLperod is reached
-                'FLAlignedPeakTime'(p)- the time (in hrs relative to the max growth rate time) at which the max Value of the FLperod is reached.
-                'lagTime'(p)-           the time (in hrs after the beginning of the experiment) to reach the max growth rate.
-                'realTime'(s)-          string containing the data sampling times (in hours after the beginning of the experiment)
-                'alignedTime'(s)-       string containing the data sampling times (in hours relative to the max growth rate time)
-                'FLperODTS'(s)-         string containing the fluorescence per od data samples for the whole experiment.
-                'maxGR' (p)-            max growth rate reached by the culture
-                'maxGRvar' (p)-         max growt rate variance for all within-experiment replicates
-                'maxGRTime'(p)-         time (in hours after the beginning of the experiment) at which the max growth rate is reached (possibly redundant with lag Time but may be small differences in the way it is calculated)
-                'FLperodAUC'(p)-        total area under the curve (AUC)for the FLperod. this measure does not include any background subtraction
-                'grAUC'(p)-             total area under the curve (AUC) of the growth rate. may come in handy
-                'halfFLAreaTime'(p)-    time at which half the total FLperod AUC in the experiment has been accumulated.
-                'halfGRAreaTime'(p)-    time at which half the total growth rate AUC in the experiment has been accumulated.
-    
-                Future versions will allow to customize the pandas dataframe exported but extracting all features will always be recommended.
-                
                 *** useful dataFrame-specific functions:
                     
                     DFsubset(dataFrame, variable, values)
@@ -785,14 +749,16 @@ class accesspr:
         self.activeExpts=[];
         self.version='4.81'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
-        self.allConditions=pd.DataFrame()
+        self.allconditions=pd.DataFrame()
         self.loadInitial()
         #self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
         #this stores the absolute duration (in hrs) of the shortest experiment
         self.defaultStats=['gr','GFP','c-GFPperod', 'GFP100','c-GFP100perod','GFP90','c-GFP90perod','GFP80','c-GFP80perod','GFP70', 'c-GFP70perod','GFP60', 'c-GFP60perod','GFP50', 'c-GFP50perod']
+        self.extractionFieldsScalar=[]
+        self.extractionFieldsTime=[]
         self.extractionFields=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC','InitialRawFL','InitialFLperOD','FinalFLperOD','FLPeak','FLAbsPeakTime','FLAlignedPeakTime','FLperodAUC','slope','responseTime','steepness','responseTimeAligned']
         self.extractionFieldsOD=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC']
-        self.extractionFieldsGrowth=['d/dtgrvar','time of max growth rate','time of max growth rate var','local max growth rate','OD gp','doubling time var', 'doubling time', 'max OD', 'lag time', 'max growth rate', 'max growth rate var']
+        self.extractionFieldsGrowth=['d/dtgr var','time of max gr','time of max gr var','local max gr','OD gp','doubling time var', 'doubling time', 'max OD', 'lag time', 'max gr', 'max gr var']
         self.extractionFieldsFL=['FLPeak','absolutePeakTime','alignedPeakTime','responseTime','responseTimeAligned','halfFL','normalizedFLPeak','slope','steepness']
         self.mediaValue={'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2, 'SucGlu 1%': 0.5, 'SucGlu 1.8% 0.2%': 0.2/2, 'SucGlu 0.2% 1.8%': 1.8/2}
         self.strainAlias={'YST_498': 'Hxt1', 'YST_499': 'Hxt1', 'Hxt4': 'Hxt4', 'Hxt2': 'Hxt2','Hxt3': 'Hxt3','Hxt5': 'Hxt5','Hxt6': 'Hxt6','Hxt7n': 'Hxt7' }
@@ -819,6 +785,7 @@ class accesspr:
         except:
             print('Impossible to get  allContents list for all experiments.')
         self.refstrains=dict()
+        self.getvariables(verbose=False)
         self.checkallstats()
         if analyseFL==True:
             self.analyseFL=True
@@ -842,6 +809,27 @@ class accesspr:
             print('Problem aligning experiments, possibly owing to missing growth rate. Consider running .getstats()')
         self.findMachines()
         self.replicateLocations()
+    def getvariables(self, verbose=True):
+        '''
+        getvariables(self, verbose=True)
+        looks into al the experiments and catalogues all available variables for each condition.
+        Names of all variables found are stored in:
+            self.extractionFieldsScalar- scalar variables, which will be brought to the dataframe.
+            self.sextractionFieldsTime- time variables, which can serve as a reference for time plotting
+        '''
+        scalarvars=[]
+        timevars=[]
+        self.extractionFieldsScalar=[]
+        self.extractionFieldsTime=[]
+        for j in self.allexperiments:
+            localvars=self.data[j].datavariables(out=True)
+            [scalarvars.append(j) for j in localvars[2]]
+            [timevars.append(j) for j in localvars[1]]
+        self.extractionFieldsScalar=list(np.unique(scalarvars))
+        self.extractionFieldsTime=list(np.unique(timevars))
+        if verbose==True:
+            print('Scalar variables registered (found in self.extractionFieldsScalar:\n'+'\n'.join(self.extractionFieldsScalar)+'\n')
+            print('Time-varying variables registered (found in self.extractionFieldsScalar:\n'+'\n'.join(self.extractionFieldsTime)+'\n')
     def checkallstats(self):
         self.statcontents=pd.DataFrame( index= list(self.data.keys()))
         for k in self.defaultStats:
@@ -872,8 +860,8 @@ class accesspr:
                 print(wt)
                 print(str(np.array(self.data[expt].allstrains)[np.where(s)][0]))
                 try:
-                    mmin=np.min(self.data[expt].d[m][wt]['ODmn']-self.normStandard['OD'])
-                    ind=np.where((self.data[expt].d[m][wt]['ODmn']-self.normStandard['OD'])==mmin)
+                    mmin=np.min(self.data[expt].d[m][wt]['OD mean']-self.normStandard['OD'])
+                    ind=np.where((self.data[expt].d[m][wt]['OD mean']-self.normStandard['OD'])==mmin)
                 except:
                     print('couldn''t get to normalise in '+str(m)+' '+str(wt))
                 self.normalizationFactor[expt]=np.mean(self.data[expt].d[m][wt][self.normStandard['channel']][ind, :])
@@ -1172,7 +1160,7 @@ class accesspr:
     def resetFL(self):
         '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
         for expt in self.allexperiments:
-            xpr.data[expt].reset()
+            self.data[expt].reset()
     def containssetup(self, media, strain, verbose=False, strict=True, musthave='gr'):
         '''
         Creates a list of experiments that contain the specified conditions.
@@ -1219,7 +1207,7 @@ class accesspr:
         '''
         getAllContents(self)
         creates two dataframes in the accesspr object:
-            self.allConditions.- a dataframe of unique media/strain conditions in all experiments (useful for looping through all conditions once)
+            self.allconditions.- a dataframe of unique media/strain conditions in all experiments (useful for looping through all conditions once)
             self.allcontents.- a dataframe containing reating experiment, media, strain and plate locations of each condition.
             This object is useful when you want to only consider or merge certain wells or biological replicates 
         '''
@@ -1229,10 +1217,10 @@ class accesspr:
             #print(cl)
             cl= pd.concat([cl, ppf.conditionList(self.data[key])], ignore_index=True)
             rl= pd.concat([rl, ppf.replicateList(self.data[key])], ignore_index=True)
-        self.allReplicates=rl
+        self.allreplicates=rl
         self.allcontents=cl
-        self.allConditions= pd.DataFrame(np.column_stack([cl.values[:,1], cl.values[:,2]]), columns=['media', 'strain'])
-        self.allConditions=self.allConditions.drop_duplicates()
+        self.allconditions= pd.DataFrame(np.column_stack([cl.values[:,1], cl.values[:,2]]), columns=['media', 'strain'])
+        self.allconditions=self.allconditions.drop_duplicates()
 
     def correctauto(self, f=['GFP', 'AutoFL'], experiments='all',media='all', strains='all', refstrain=['WT'], figs=True, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True, mediausemean=False, ignoreneg=True):
         ''' function designed to run correctauto on all experiments, or combinations of media and strains. 
@@ -1324,13 +1312,13 @@ class accesspr:
         '''
         if exptColors==0:
             exptColors= colorDict(keys=self.allexperiments)
-        cl= ac.DFsubset(self.allConditions, 'strain', ['null'])
+        cl= ac.DFsubset(self.allconditions, 'strain', ['null'])
         cl=cl.reset_index(drop=True)
         for j in range(0, np.size(cl, 0)):
             md=cl.loc[j, 'media']
             st=cl.loc[j, 'strain']
-            xpr.containssetup(cl.loc[j, 'media'], cl.loc[j, 'strain'], strict=False)
-            expts=xpr.containslist
+            self.containssetup(cl.loc[j, 'media'], cl.loc[j, 'strain'], strict=False)
+            expts=self.containslist
         for expt in expts:
             plt.scatter(self.data[expt].d[md][st]['OD'], self.data[expt].d[md][st][self.FL[expt]['mainFL']], color=exptColors[expt])
         plt.xlabel('OD of null')
@@ -1367,7 +1355,7 @@ class accesspr:
                     self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, figs=False)
                     if savestate==True:
                         picklefilename='./xprdata/'+self.date+'/'+'getstats/'+key+'.pkl'
-                        pickle.dump(xpr.data[key], open(picklefilename, 'rb'))
+                        pickle.dump(self.data[key], open(picklefilename, 'rb'))
                         print('processing state saved locally in'+picklefilename)
                 except:
                     print('something went wrong while obtaining stats for experiment'+key)
@@ -1376,6 +1364,7 @@ class accesspr:
             #        pickle.dump(self.data[key], open(self.source + '/' +key, 'wb'))
             #        print('Experiment pickle file'+ self.source+key+' has been replaced.')
         self.containsstat('gr')
+        self.getvariables()
 
     def align(self, media, strain, alignFL=False):
         '''
@@ -1403,7 +1392,7 @@ class accesspr:
                     except KeyError:
                         try:
                             print('Warning: experiment '+key+' does not contain corrected '+mainFLperod+'. Attempting to use raw '+mainFL+' peak') 
-                            centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+'mn']==max(self.data[key].d[media][strain][mainFL+'mn']))]
+                            centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+' mean']==max(self.data[key].d[media][strain][mainFL+' mean']))]
                         except:
                             print('Fluorescence peak failed to be found. setting centered FL time to NaN')
                             #centeredTimeFL=np.nan #np.matlib.repmat(np.nan,np.size(xpr.data[key].t,0),1).reshape((np.size(xpr.data[key].t,0),))
@@ -1443,7 +1432,7 @@ class accesspr:
                     except KeyError:
                         try:
                             print('Warning: experiment '+key+' does not contain corrected '+mainFLperod+'. Attempting to use raw '+mainFL+' peak') 
-                            centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+'mn']==max(self.data[key].d[media][strain][mainFL+'mn']))]
+                            centeredTimeFL=self.data[key].t[np.where(self.data[key].d[media][strain][mainFL+' mean']==max(self.data[key].d[media][strain][mainFL+' mean']))]
                         except:
                             print('Fluorescence peak failed to be found. setting centered FL time to NaN')
                             #centeredTimeFL=np.nan #np.matlib.repmat(np.nan,np.size(xpr.data[key].t,0),1).reshape((np.size(xpr.data[key].t,0),))
@@ -1492,15 +1481,18 @@ class accesspr:
                 self.aligned=False
                 print( str(self.statcontents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statcontents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statcontents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
+            self.getvariables()
     def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if centeringVariable=='Time centered at gr peak':
-            print('removing null from strain list as it does not have growth rate')
+            print('removing null and expts without estimated growth rate')
             if isinstance(strain, list):
                 strain.remove('null')
             if isinstance(conditionsDF, pd.DataFrame):
                 conditionsDF= conditionsDF[conditionsDF['strain'].values != 'null']
+                expswithgr=self.statcontents[selt.statcontents['gr']==1]['experiment'].values
+                conditionsDF[conditionsDF['experiment'] in expswithgr]
         if experiments=='all':
             experiments=self.allexperiments
         else:
@@ -1525,7 +1517,7 @@ class accesspr:
         if media and strain: #we 
             for m in media:
                 for s in strain:
-                    conditionsDF=DFsubset(DFsubset(DFsubset(self.allReplicates, 'media', [m]), 'strain', s), 'experiment', experiments)
+                    conditionsDF=DFsubset(DFsubset(DFsubset(self.allreplicates, 'media', [m]), 'strain', s), 'experiment', experiments)
                     #print('processing '+m)
                     interpolated= self.interptimesnew(replicateMatrix=conditionsDF, dtype=dtype, centeringVariable=centeringVariable)
                     interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
@@ -1571,7 +1563,7 @@ class accesspr:
                     if ppf.hasKey(factorMarkers,fact)==False: 
                         factorMarkers[fact]=(markers*100)[i_fact]
                     interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha, marker=factorMarkers[fact], markevery=10)
-                    interpolated['Group_'+fact+'_'+dtype+'mn']=interpolatedFinal[dtype+'mn']
+                    interpolated['Group_'+fact+'_'+dtype+' mean']=interpolatedFinal[dtype+' mean']
                     if bootstrap>0:
                         st=dtype+'bootstrapsd'
                     else:
@@ -1793,12 +1785,12 @@ class accesspr:
                 mx= np.max(maxdf['FinalOD'])
         else:
             mx=False
-        for j in range(0, np.size(self.allConditions,0)):
-            if self.allConditions.values[j,1]=='null':
+        for j in range(0, np.size(self.allconditions,0)):
+            if self.allconditions.values[j,1]=='null':
                 continue
-            df=pd.concat([df, self.timeStat(media=self.allConditions.values[j,0],strain=self.allConditions.values[j,1], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
+            df=pd.concat([df, self.timeStat(media=self.allconditions.values[j,0],strain=self.allconditions.values[j,1], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
             #except:
-            #    print('condition ', self.allConditions.values[j,1], ' in ' ,self.allConditions.values[j,0], 'showed extraction problems.')
+            #    print('condition ', self.allconditions.values[j,1], ' in ' ,self.allconditions.values[j,0], 'showed extraction problems.')
         df.index= range(0,np.size(df,0))
         if media !='all': #if media subset is entered then filter dataframe by that subset
             df=DFsubset(df, 'media', media)
@@ -1819,7 +1811,7 @@ class accesspr:
         formatval=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, int) else np.array(t)
         cols= ['experiment','machine','media', 'strain']+ formatlist(times)
         isWithinBound= np.array([j<=self.interpLimit for j in formatval(times)]) ###true or false array saying 
-        print(type(isWithinBound))
+        #print(type(isWithinBound))
         #whether the times fall within the length of the shortest experiment
         if np.size(np.where(isWithinBound==False))>0: #warn that times out of the bound will be excluded.
             print('Warning: times above ', self.interpLimit, ' are being excluded')
@@ -1850,7 +1842,7 @@ class accesspr:
                         f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/np.max(datavals) , bounds_error=False, fill_value=np.nan) #create interpolation function
                 else: #if scaling is not required then we just proceed with the original time series.
                     f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals, bounds_error=False, fill_value=np.nan) #create interpolation function
-                fin.loc[j,times]= f(times) #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
+                fin.loc[j,times]= [j for j in f(times)] #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
             except:
                 print('Something went wrong with extraction of '+expts[j] )		
             if includedescriptors==True: # add media and strain if required
@@ -1858,10 +1850,11 @@ class accesspr:
                 fin.loc[j,'machine']=self.machines[self.containslist[j]]
                 fin.loc[j,'media']= media
                 fin.loc[j,'strain']= strain
+        fin[times]=fin[times].astype('float')
         return fin        
     def replicateLocations(self):
-        if not self.allConditions.empty:
-            daf=pd.DataFrame(index=[self.allConditions['strain'], self.allConditions['media']], columns=self.allexperiments)
+        if not self.allconditions.empty:
+            daf=pd.DataFrame(index=[self.allconditions['strain'], self.allconditions['media']], columns=self.allexperiments)
             daf=daf.fillna(0)
             for j in daf.index:
                 self.containssetup(media=j[1], strain=j[0], strict=False)
@@ -1870,8 +1863,8 @@ class accesspr:
             self.conditionLocTable=daf
             self.numReplicates=pd.DataFrame(columns=['strain', 'media', 'numReplicates'])
             self.numReplicates['numReplicates']=daf.sum(1).values
-            self.numReplicates['strain']=self.allConditions['strain']
-            self.numReplicates['media']=self.allConditions['media']
+            self.numReplicates['strain']=self.allconditions['strain']
+            self.numReplicates['media']=self.allconditions['media']
             
         
     def text2d(self, media=False, strains=False, dimx='FinalOD', dimy='maxGR', strainColors=False, xlim=False, ylim=False, markersize=500, newFig=True):
@@ -1881,16 +1874,16 @@ class accesspr:
         legs=[]
         plt.xlabel(dimx); plt.ylabel(dimy)
         if strains==False:
-            strains=np.unique(list(self.allConditions['strain'].values))
+            strains=np.unique(list(self.allconditions['strain'].values))
         if strainColors==False:
-            strainColors= dict(zip( self.allConditions['strain'].values, ppf.randomColors(np.size(self.allConditions['strain'].values))))
+            strainColors= dict(zip( self.allconditions['strain'].values, ppf.randomColors(np.size(self.allconditions['strain'].values))))
         print(strainColors)
         for strain in  strains:
             print('current strain is'+strain) 
             patches.append(pch.Patch(color= strainColors[strain]))
             legs.append(strain)
             if np.all(media==False):
-                media=self.allConditions[self.allConditions['strain']==strain]['media'].values
+                media=self.allconditions[self.allconditions['strain']==strain]['media'].values
             for m in media:
                  df=self.extractRepInfo(m, strain) 
                  plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
@@ -1994,7 +1987,7 @@ class accesspr:
             condition.
         '''
         if not isinstance(conditionsDF, (pd.DataFrame)):
-            conditionsDF=self.allReplicates
+            conditionsDF=self.allreplicates
         if type=='notime':
             df=self.extractallinfonew()
         if type=='timecol':
@@ -2023,7 +2016,7 @@ class accesspr:
         '''
         interpTimes(self, media, strain, dtype='OD', centeringVariable='time')   
         interpolate all replicates across the same time scale.
-        replicateMatrix is a matrix of the format of self.allReplicates with the specific replicates to interpolate
+        replicateMatrix is a matrix of the format of self.allreplicates with the specific replicates to interpolate
         dtype: data type to extract. it must be present in all wells.
         centeringVariable: the variable used for the x axis
         descriptors: the final object will contain full descriptor factors for each condition:  expt, media, strain, plateloc
@@ -2082,7 +2075,7 @@ class accesspr:
                 adjustedTimes[dtype].append(np.zeros([np.size(fitpoints),1])*np.nan)
                 adjustedTimes[centeringVariable].append(np.zeros([np.size(fitpoints),1])*np.nan)
                 continue
-            if not(dtype.endswith('mn')) and not(dtype.endswith('gr')) and not(dtype.endswith('perod')) and not(dtype.endswith('var')):
+            if not(dtype.endswith(' mean')) and not(dtype.endswith('gr')) and not(dtype.endswith('perod')) and not(dtype.endswith('var')):
                 adjustedTimes[dtype].append(self.data[expt].d[media][strain][dtype][fitpoints, platelocIndex])
             else:
                 try:
@@ -2143,6 +2136,7 @@ class accesspr:
         return final
 
     def extractallinfonew(self, replicateDF=[], growthstats=[], flstats=[]):
+        self.getvariables() #making sure all the latest added variables are available.
         if not isinstance(replicateDF, pd.DataFrame):
             replicateDF= self.allcontents
         df=pd.DataFrame(index= replicateDF.index, columns=self.extractionFields)
@@ -2151,7 +2145,7 @@ class accesspr:
             ##Pending: generate modular extraction functions depending on expt, media, strain, plateloc
         filler=[np.nan for j in range(0, len(replicateDF))]
         if not growthstats:
-            growthstats=self.extractionFieldsGrowth
+            growthstats=self.extractionFieldsScalar
         if not flstats:
             flstats= self.extractionFieldsFL
         growthdata={};
@@ -2160,22 +2154,21 @@ class accesspr:
                 growthdata[stat]=[self.extractStat(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], stat) for j in range(0, len(replicateDF))]
             except:
                 growthdata[stat]=[self.extractStat(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], stat) for j in range(0, len(replicateDF))]
-        growthdata['growth rate auc']=[self.extractGRAUC(replicateDF.loc[j,:].values[0],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], replicateDF.loc[j,:].values[3]) for j in range(0, len(replicateDF))]
+        growthdata['gr auc']=[self.extractGRAUC(replicateDF.loc[j,:].values[0],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], replicateDF.loc[j,:].values[3]) for j in range(0, len(replicateDF))]
         growthdata['initial OD']=[self.extractInitialODFull(  replicateDF.loc[j,:].values[0],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], replicateDF.loc[j,:].values[3]) for j in range(0, len(replicateDF))]
         growthdata['final OD raw']=[self.extractFinalODFull(  replicateDF.loc[j,:].values[0],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], replicateDF.loc[j,:].values[3]) for j in range(0, len(replicateDF))]
         growthdata['max OD raw']=[self.extractMaxODFull(  replicateDF.loc[j,:].values[0],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], replicateDF.loc[j,:].values[3]) for j in range(0, len(replicateDF))]
-
         nfl=self.consensusFL
         FLData={};
         getalstFL=lambda expt, m,s,fl: alignStats(expt, m, s, dtype=nfl)
-        alloutsFL=[getalstFL(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2],'GFP80') for j in range(0, len(replicateDF))]
+        alloutsFL=[getalstFL(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2], nfl) for j in range(0, len(replicateDF))]
         for field in flstats:
             FLData[field]=[np.float(alloutsFL[j][field]) for j in range(0, len(replicateDF))]
         nflod=self.consensusFLperod
         FLODData={};
         getalstFLOD=lambda expt, m,s,fl: alignStats(expt, m, s, dtype=nflod)
         #aligned fluorescence statistics calculation
-        alloutsFLOD=[getalstFLOD(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2],'c-GFP80perod') for j in range(0, len(replicateDF))]
+        alloutsFLOD=[getalstFLOD(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2],nflod) for j in range(0, len(replicateDF))]
         for field in flstats:
             try:
                 FLODData['FLOD'+field]=[np.float(alloutsFLOD[j][field]) for j in range(0, len(replicateDF))]   
