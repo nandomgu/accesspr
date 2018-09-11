@@ -1482,17 +1482,25 @@ class accesspr:
                 print( str(self.statcontents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statcontents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statcontents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
             self.getvariables()
-    def plotReplicateMeanNew(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
+    def plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
         '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
         if centeringVariable=='Time centered at gr peak':
             print('removing null and expts without estimated growth rate')
             if isinstance(strain, list):
                 strain.remove('null')
-            if isinstance(conditionsDF, pd.DataFrame):
-                conditionsDF= conditionsDF[conditionsDF['strain'].values != 'null']
-                expswithgr=self.statcontents[selt.statcontents['gr']==1]['experiment'].values
-                conditionsDF[conditionsDF['experiment'] in expswithgr]
+        if isinstance(conditionsDF, pd.DataFrame):
+            conditionsDF= conditionsDF[conditionsDF['strain'].values != 'null']
+            conditionsDF=conditionsDF.reset_index(drop=True)
+            if centeringVariable=='Time centered at gr peak' or dtype=='gr':
+                print('removing expts without estimated growth rate')
+                self.checkallstats()
+                contents=self.statcontents
+                contents=contents.reset_index()
+                expswithgr=contents[contents['gr']>0.99]['index'].values
+                conditionsDF=conditionsDF[[j  in expswithgr for j in conditionsDF['experiment']]]
+                conditionsDF=conditionsDF.reset_index(drop=True)
+            #print(conditionsDF)
         if experiments=='all':
             experiments=self.allexperiments
         else:
@@ -1575,52 +1583,6 @@ class accesspr:
                     #interpolated final contains the mean and sd that were plotted
                     interpolatedFinal=bootstrapInterps(interpolated, centeringVariable, dtype, bootstrap=bootstrap, col=col, alpha=alpha)
                     return(interpolatedFinal)
-    def plotReplicateMean(self, media, strain, experiments='all', ignoreExps=False, dtype='', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='Time centered at gr peak'):
-        '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
-        if dtype=='':
-            try:
-                dtype=self.consensusFLperod
-            except:
-                dtype='OD'
-        if np.size(media)==1:
-            mediaName=media
-            media=[media]
-        cv=[]
-        for m in media:
-            #print('processing '+m)
-            interpolated= self.interpTimes(m, strain, dtype=dtype, experiments=experiments, ignoreExps=ignoreExps, centeringVariable=centeringVariable)
-            interpolated[dtype]=interpolated[dtype][excludeFirst:excludeLast]
-            interpolated[centeringVariable]=interpolated[centeringVariable][excludeFirst:excludeLast]
-            if normalise==True:
-                interpolated[dtype]=interpolated[dtype]/np.nanmax(flatten(interpolated[dtype])) 
-            mn=np.nanmean(interpolated[dtype],1)
-            sd=np.nanstd(interpolated[dtype],1)
-            #calculating the coefficient of variation
-            cv.append(np.nanmean(sd/mn))
-            ##generate bootstrap replicates
-            ncols=np.size(interpolated[dtype], 1)
-            nrows=np.size(interpolated[dtype], 0)
-            reps=mn#np.nans(nrows)#create a dummy column for the bootstraps
-            ###generating new traces  from combining other traces
-            for j in range(0, bootstrap): ###till the number of bootstrap replicates is reached
-                ###sample a number of replicates
-                addmn=interpolated[dtype][:, sample(range(0,ncols),randint(1,ncols))].mean(1)  ###sample from one to ncols -1 , and get those specific replicates from the set
-                reps=np.column_stack([reps, addmn])
-            if bootstrap>0:
-                totalmn=np.nanmean(reps,1)
-                totalsd=np.nanstd(reps,1)
-                plt.plot(interpolated[centeringVariable], totalmn, color=col)
-                plt.fill_between(interpolated[centeringVariable], mn-totalsd, mn+totalsd, color=col, alpha=alpha, label=strain+' in '+m )
-                plt.xlabel(centeringVariable)
-                plt.ylabel(dtype)
-            else:
-                plt.plot(interpolated[centeringVariable], mn, color=col)
-                plt.fill_between(interpolated[centeringVariable], mn-sd, mn+sd, color=col, alpha=alpha, label=strain+' in '+m )
-                plt.xlabel(centeringVariable)
-                plt.ylabel(dtype)
-                ###then get their mean
-                ###then add it to the column         
-        return cv
 
     def getMediaValues(self, df=None):
         mediaValue=[]
@@ -1672,71 +1634,6 @@ class accesspr:
                     legends.append([key])
                 else: continue
         plt.legend(legends, loc = 'upper right')
-        plt.show(block=False)
-
-    def plotConditionAligned(self, media, strain, dtype='OD', experiments='all', normalize=0, centerAtFLPeak=0,col='black', range=0):
-        '''
-        Plots the specified datatype for specified condition for all suitable
-        experiments in one plot, colouring all of them the same way, allowing to normalize or cnter at fluorescence
-        If aligned=True, the data are plotted against the aligned time vector.
-        '''
-        self.alignAll()
-        self.containssetup(media, strain)
-        self.media = media
-        self.strain = strain
-        expts=self.containslist
-        plt.title('aligned '+ dtype + ' over time across replicates', color = 'b')
-        timestr=['Time relative to growth rate peak time (hrs)', 'Time relative to Fluorescence peak time (hrs)']
-        plt.xlabel(timestr[centerAtFLPeak])
-        plt.ylabel(dtype + ' in a.u.')
-        legends = []
-        if normalize==1:
-            for key in expts:
-                if experiments!='all': 
-                    if key in experiments==False:
-                        continue 
-                if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
-                    and ppf.hasKey(self.data[key].d[media][strain], dtype):
-                    plt.plot(self.data[key].d[media][strain]['Time centered at gr peak'], normalizeOverTime(self.data[key], self.media, self.strain, dtype=dtype),color=col)
-                    plt.ylabel('normalized '+ dtype + ' in a.u.')
-                else: continue
-        else:
-            for key in expts:
-                if experiments!='all': 
-                    if key in experiments==False:
-                        continue  
-                if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
-                    and ppf.hasKey(self.data[key].d[media][strain], dtype):
-                    plt.plot(self.data[key].d[media][strain]['Time centered at gr peak'], self.data[key].d[self.media][self.strain][dtype],color=col)
-                else: continue 
-        #plt.show(block=False)
-
-    def plotConditionStd(self, media, strain, dtype='OD', normalize=0, centerAtFLPeak=0,col='black', range=0):
-        '''
-        Purpose: compare conditions from the results of different experiments
-        Plots the specified datatype for specified condition for all suitable
-        experiments in one plot, colouring all of them the same way, allowing to normalize or cnter at fluorescence
-        If aligned=True, the data are plotted against the aligned time vector.
-        '''
-        self.containssetup(media, strain)
-        plt.title('aligned '+ dtype + ' over time across replicates', color = 'b')
-        timestr=['Time relative to growth rate peak time (hrs)', 'Time relative to Fluorescence peak time (hrs)']
-        plt.xlabel(timestr[centerAtFLPeak])
-        plt.ylabel(dtype + ' in a.u.')
-        legends = []
-        self.align(self.media, self.strain)
-        if normalize==1:
-            for key in self.containslist: 
-                if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
-                    and ppf.hasKey(self.data[key].d[media][strain], dtype):
-                    plt.plot(self.data[key].t, normalizeOverTime(self.data[key], self.media, self.strain), color=col)
-                else: continue
-        else:
-            for key in self.containslist: 
-                if ppf.hasKey(self.data[key].d, media) and ppf.hasKey(self.data[key].d[media], strain)\
-                    and ppf.hasKey(self.data[key].d[media][strain], dtype):
-                    plt.plot(self.data[key].t, self.data[key].d[self.media][self.strain][dtype], color=col)
-                else: continue
         plt.show(block=False)
 
     def plotRawReplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, experiments='all', exptColors=False, addLegend=True, xstat=[], color=False):
@@ -1889,89 +1786,6 @@ class accesspr:
                  plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
         plt.figlegend(patches, legs, 'upper right')
         return strainColors
-    def interpTimes(self, media, strain, dtype='OD', centeringVariable='time', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all'):    
-        '''
-        interpTimes(self, media, strain, dtype='FLperod', centeringVariable='time', upperLim=16, exceptionShift=0.01, ignoreExps=False, experiments='all')   
-        interpolate all replicates across the same time scale.
-        
-        '''
-        self.containssetup(media, strain, strict=True, musthave=dtype)
-        if experiments!='all':
-            experimentList=experiments
-        else:
-            experimentList=self.containslist
-        print(experimentList)
-        if ignoreExps!=False:
-            try:
-                [experimentList.remove(j) for j in ignoreExps]
-            except:
-                print(str(ignoreExps)+'is not on the list')
-        interpRange=[]
-        maxLengths=[]
-        startPoints=[]
-        adjustedTimes=dict()
-        for expt in experimentList: ###retireving the limiting values for interpolation amongst all experiments.
-            #print('processing experiment'+expt+'...')
-            adjustedTimes[expt]=dict()
-            maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
-            startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
-            #startpoints=np.array(startPoints)
-            #maxLengths=np.array(maxLengths)
-        #print('startpoints: ', startPoints)
-        #print('maxlengths: ', maxLengths)
-        interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
-        #print('Interprange: ', interpRange)
-        func= lambda x: fitsBounds(x, interpRange) ### this lambda creates function func which will evaluate whether x falls within the interpRange
-        for expt in experimentList:
-            #print('entered storage loop')
-            fitpoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
-            #print(np.shape(self.data[expt].d[media][strain][dtype])[1])
-            #print('fitpoints of '+expt+': ', fitpoints)
-            try:
-                adjustedTimes[expt][dtype]= self.data[expt].d[media][strain][dtype][fitpoints] 
-            except:
-                try:
-                    print(dtype+' cannot be processed as single dimension. attempting column-averaging...')
-                    adjustedTimes[expt][dtype]= self.data[expt].d[media][strain][dtype][fitpoints,:].mean(1)
-                except:
-                    print('impossible to process '+dtype+'. Please make sure the statistic exists and is time x replicate array.')
-            try:
-                adjustedTimes[expt][centeringVariable]=np.around(self.data[expt].d[media][strain][centeringVariable][fitpoints],2)
-            except:
-                print('problems retrieving '+centeringVariable+'. attempting to align specific condition...')
-                self.align(media, strain)
-                adjustedTimes[expt][centeringVariable]=np.around(self.data[expt].d[media][strain][centeringVariable][fitpoints],2)
-            #print('adjustedTimes of '+expt+': ', adjustedTimes[expt]['time']) 
-            #print(np.column_stack([adjustedTimes[expt]['time'],adjustedTimes[expt][dtype]]))
-        finalDict={};
-        finalDict['experiments']=experimentList
-        finalDict[dtype]=np.empty([np.size(adjustedTimes[experimentList[0]][centeringVariable]), np.size(experimentList)], dtype=None)
-
-        try:
-            for j in range(0, np.size(experimentList)): #arbitrarily taking the first experiment in the list as reference
-                fint=scint.interp1d(np.around(adjustedTimes[experimentList[j]][centeringVariable],2),adjustedTimes[experimentList[j]][dtype])
-                finalDict[centeringVariable]=np.around(adjustedTimes[experimentList[0]][centeringVariable],2)
-                finalDict[dtype][:, j]=fint(np.around(adjustedTimes[experimentList[0]][centeringVariable],2))
-
-        except ValueError:
-            print('Warning: time out of range. trying interpolation from full time vectors...')
-            #try:
-            for j in range(1, np.size(experimentList)): #arbitrarily taking the first experiment in the list as reference
-                try:
-                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain][centeringVariable],2),self.data[experimentList[j]].d[media][strain][dtype])
-                except:
-                    print(dtype+' cannot be interpolated as single dimension. attempting column-averaging...')
-                    fint=scint.interp1d(np.around(self.data[experimentList[j]].d[media][strain][centeringVariable],2),self.data[experimentList[j]].d[media][strain][dtype].mean(1))
-                temptime= adjustedTimes[experimentList[0]][centeringVariable] ##[0:-1]
-                #temptime[0]=temptime[0]+exceptionShift
-                #temptime[-1]=temptime[-1]- exceptionShift
-                #print('expt time: ' ,np.around(adjustedTimes[experimentList[j]]['time'],2))
-                #print('interpolation time: ' ,temptime)
-                finalDict[dtype][:, j]=fint(temptime)
-                finalDict[centeringVariable]=temptime
-            #except ValueError:
-            #print('Error: interpolation time out of bounds. please screen for time discrepancies')
-        return finalDict
     def makedataframe(self, type='notime', times=False, dtype='OD', xstat='time', conditionsDF=False):
         ''' makedataframe(self, type='notime', times=False, dtype='OD', xstat='time')
         Exports a dataframe with data in 3 different formats:
@@ -2022,28 +1836,29 @@ class accesspr:
         descriptors: the final object will contain full descriptor factors for each condition:  expt, media, strain, plateloc
         '''
         replicateMatrix=replicateMatrix[replicateMatrix['strain']!='null'] ###removing annoying nulls!!! which should have nans in all values yet they don't because.
-        replicateMatrix=replicateMatrix.reindex()
+        replicateMatrix=replicateMatrix.reset_index(drop=True)
+        print(replicateMatrix)
         interpRange=[]
         maxLengths=[]
         startPoints=[]
         removelist=[]
         adjustedTimes=dict()
-        adjustedTimes[dtype]=[] #working with ordered lists
+        adjustedTimes[dtype]=[]
         adjustedTimes[centeringVariable]=[] #working with ordered lists
         filter=[];
         for j in range(0, np.size(replicateMatrix, 0)): ###retireving the limiting values for the interpolation amongst all experiments.
             try:
                 expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
-                print(expt+' '+media+' '+strain)
                 maxLengths.append(np.around(self.data[expt].d[media][strain][centeringVariable][-1],2))
                 startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
             except:
                 print('problem measuring length of data trace. '+centeringVariable+' may not exist for '+expt+' '+media+' '+strain+'\n excluding expriment '+expt)
+                continue
         removelist.append(expt)
         removelist=np.unique(removelist)
-        for j in removelist:
-            replicateMatrix=replicateMatrix[replicateMatrix['experiment']!=j]
-            replicateMatrix.reindex()
+        #for j in removelist:
+        #    replicateMatrix=replicateMatrix[replicateMatrix['experiment']!=j]
+        #    replicateMatrix=replicateMatrix.reset_index(drop=True)
         interpRange=[np.max(np.array(startPoints)), np.min(np.array(maxLengths))]
         print('setting interpolation limit with new information')
         self.interpLimit=np.min(np.array(maxLengths))
@@ -2057,9 +1872,14 @@ class accesspr:
         flag=[]
         for j in range(0, np.size(replicateMatrix, 0)):
             #print('processing replicate number', j)
+            #print(j)
             expt, media, strain, plateloc=replicateMatrix.values[j, [0,1,2,3]]
             #finding the points that fit the range
             fitpoints=np.where([func(x) for x in self.data[expt].d[media][strain][centeringVariable]])
+            if j==0:
+                firstx=np.around(self.data[expt].d[media][strain][centeringVariable][fitpoints],2)
+                finalDict={}
+                finalDict[dtype]=np.zeros([len(firstx), np.size(replicateMatrix,0)]) #working with ordered lists
             namesarray.append(expt+' '+media+' '+strain+' '+' '+plateloc+ ' '+ dtype)
             if descriptors==True:
                 exptsarray.append(expt)
@@ -2084,7 +1904,7 @@ class accesspr:
                     adjustedTimes[dtype].append(np.zeros([np.size(fitpoints),1])*np.nan)
                     #adjustedTimes[centeringVariable].append(np.zeros([np.size(fitpoints),1])*np.nan)
             adjustedTimes[centeringVariable].append(np.around(self.data[expt].d[media][strain][centeringVariable][fitpoints],2))
-        finalDict={};
+        #finalDict={};
         if isinstance(xvals, (bool)): #if it is not a boolean
             xvals=np.around(adjustedTimes[centeringVariable][0],2)  #arbitrarily taking the times of the first condition as a reference
         finalDict[dtype]=np.empty([np.size(xvals), len(adjustedTimes[dtype])], dtype=None)
@@ -2232,10 +2052,6 @@ class accesspr:
             return self.data[expt].d[media][strain]['OD'][:,whichisplateloc][0]
         else:
             return np.nanmean(self.data[expt].d[media][strain]['OD'][0,:])
-
-
-
-
     def extractFinalODFull(self, expt, media, strain, plateloc=False):
         return np.nanmean(self.data[expt].d[media][strain]['OD'][-1,:])
     def extractMaxODFull(self, expt, media, strain, plateloc=False):
