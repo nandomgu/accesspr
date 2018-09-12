@@ -13,6 +13,7 @@ from random import choice, randint, sample
 import statsmodels.stats.api as sms
 from matplotlib.colors import hex2color
 from datetime import datetime
+import re
 import colors
 #from decimal import *
 #getcontext().prec = 3
@@ -903,7 +904,8 @@ class accesspr:
                     for f in files:
                         if f.endswith('.xls') or f.endswith('.xlsx'):
                             hasExcel+=1;
-                            if f.endswith('contents.xls') or f.endswith('contents.xlsx'):
+
+                            if f.endswith('contents.xls') or f.endswith('contents.xlsx') or np.array([isinstance(j, str) for j in re.findall("contents",f, flags=re.IGNORECASE)]).any():
                                 contentsfile=self.source+'/'+entry+'/'+f
                             else: #it is not a contents file so we check for, or do preprocessing.
                                 if self.preprocess==True:
