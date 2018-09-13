@@ -922,7 +922,7 @@ class accesspr:
                             if contentsfile and datafile:
                                 #creating pr file from scratch
                                 p=pr.platereader(datafile, contentsfile)
-                                exptname=p.name.split('/')[-1]
+                                exptname=re.split(r'[/\\]', p.name)[-1]
                                 self.data[exptname]=p 
                                 print('successfully loaded a platereader experiment '+exptname)
                                 self.activeExpts.append(exptname)
@@ -2049,9 +2049,9 @@ class accesspr:
         else:
             return np.nanmean(self.data[expt].d[media][strain]['OD'][0,:])
     def extractInitialODFull(self, expt, media, strain, plateloc=False):
-        if isinstance(self.data[expt].d[media][strain]['plateloc'], list):
+        if not isinstance(plateloc, list):
             whichisplateloc=np.where([plateloc==j for j in self.data[expt].d[media][strain]['plateloc']])[0]
-            return self.data[expt].d[media][strain]['OD'][:,whichisplateloc][0]
+            return np.nanmean(self.data[expt].d[media][strain]['OD'][:,whichisplateloc][0])
         else:
             return np.nanmean(self.data[expt].d[media][strain]['OD'][0,:])
     def extractFinalODFull(self, expt, media, strain, plateloc=False):
