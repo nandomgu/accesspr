@@ -13,6 +13,7 @@ from random import choice, randint, sample
 import statsmodels.stats.api as sms
 from matplotlib.colors import hex2color
 from datetime import datetime
+from xlrd import XLRDError
 import re
 import colors
 #from decimal import *
@@ -735,6 +736,7 @@ class accesspr:
         self.prtype='Tecan'
         #source is a directory with several pickle files. if no pickles are found, then it tries to find experiments.
         self.source = source
+        self.failedfiles=[]
         self.ignoreFiles=ignoreFiles
         self.onlyFiles=onlyFiles
         self.analyseFL=analyseFL
@@ -833,7 +835,7 @@ class accesspr:
             print('Time-varying variables registered (found in self.extractionFieldsScalar:\n'+'\n'.join(self.extractionFieldsTime)+'\n')
     def checkallstats(self):
         self.statcontents=pd.DataFrame( index= list(self.data.keys()))
-        for k in self.defaultStats:
+        for k in self.defaultStats+self.extractionFieldsTime:
             self.containsstat(k, printstats=False)
             #self.containsstat('GFP', printstats=False)
             #self.containsstat('c-GFPperod', printstats=False)
@@ -872,67 +874,64 @@ class accesspr:
         1. pickles created with the pickle library
         2. folders, each containing two excel datasheets: a) data file and b)contents file (characterised by ending in contents.xls or contents.xlsx
         '''
-        if path.exists(self.source) and path.isdir(self.source):
-            dirs = os.listdir(self.source)
-            for entry in dirs:
-                print('trying to import '+entry)
-                if entry.endswith('.pkl') and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) :
-                    pkl = open(self.source + '/' + entry, 'rb')
-                    p=pickle.load(pkl,encoding= self.encoding)
-                    exptname=p.name.split('/')[-1]
-                    self.data[exptname] = p
-                    self.exptInfo[exptname]= {}
-                    self.exptInfo[exptname]['type']='pickle'
-                    self.exptInfo[exptname]['datapath']=self.data[exptname].name+'.xlsx'
-                    self.exptInfo[exptname]['dsheetnumber']=self.data[exptname].dsheetnumber
-                    try:
-                        self.exptInfo[exptname]['contentspath']=self.data[exptname].aname
-                    except:
-                        print('failed to find a contents file name')
-                    self.activeExpts.append(exptname)
-                    pkl.close()
-                    self.experimentDuration[exptname]=self.data[exptname].t[-1]
-        ##if the path its                
-                elif path.exists(self.source) and os.path.isdir(self.source+'/'+entry) and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles):
-                    #this generally means that the path is a directory. we look inside to see if there are any excel files that look like pr files.
-                    datafile=[]
-                    contentsfile=[]
-                    pth=self.source+'/'+entry; #store the full path of the directory.
-                    #look for 
-                    files=os.listdir(pth)
-                    hasExcel=0;
-                    for f in files:
-                        if f.endswith('.xls') or f.endswith('.xlsx'):
-                            hasExcel+=1;
-
-                            if f.endswith('contents.xls') or f.endswith('contents.xlsx') or np.array([isinstance(j, str) for j in re.findall("contents",f, flags=re.IGNORECASE)]).any():
-                                contentsfile=self.source+'/'+entry+'/'+f
-                            else: #it is not a contents file so we check for, or do preprocessing.
-                                if self.preprocess==True:
-                                    #                                     if f.endswith('.xslx') and not f.endswith('preprocessed.xlsx'): #freshly preprocess everytime.
-                                    #                                         preprocessExpt(expt, main=self.consensusFL, supporting=self.supportingFL)
-                                    #                                         datafile=self.source+'/'+entry+'/'+f.split('.xlsx')[0]+'preprocessed.xslx'
-                                    #                                 else:
-                                    if not f.endswith('preprocessed.xlsx'): #if no preprocessing required import file wo preprocessing
-                                        datafile=self.source+'/'+entry+'/'+f
-                        if hasExcel>=2:
-                            print('directory with excel files will be incorporated.')
-                            #the folder may contain more than one experiments and the name of the experiment may differ from
-                            #that of the folder. therefore we use the experiment filename as a unifying reference
-                            if contentsfile and datafile:
-                                #creating pr file from scratch
-                                p=pr.platereader(datafile, contentsfile)
-                                exptname=re.split(r'[/\\]', p.name)[-1]
-                                self.data[exptname]=p 
-                                print('successfully loaded a platereader experiment '+exptname)
-                                self.activeExpts.append(exptname)
-                                self.exptInfo[exptname]= {}
-                                self.exptInfo[exptname]['type']='datasheet'
-                                self.exptInfo[exptname]['datapath']=self.data[exptname].name+'.xlsx'
-                                self.exptInfo[exptname]['contentspath']=self.data[exptname].aname
-                                self.experimentDuration[exptname]=self.data[exptname].t[-1]
-        #pickle.dump(self.data, open('xpr_startingdata.pkl', 'wb'))
-        #pickle.dump(self, open('xprBackup.pkl', 'wb'))
+        if isinstance(self.source, str):
+            self.source=[self.source]
+        for src in self.source:
+            if path.exists(src) and path.isdir(src):
+                dirs = os.listdir(src)
+                for entry in dirs:
+                    print('trying to import '+entry)
+                    if entry.endswith('.pkl') and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) :
+                        pkl = open(src + '/' + entry, 'rb')
+                        p=pickle.load(pkl,encoding= self.encoding)
+                        exptname=re.split(r'[/\\]', p.name)[-1]
+                        self.data[exptname] = p
+                        self.activeExpts.append(exptname)
+                        pkl.close()
+                        self.experimentDuration[exptname]=self.data[exptname].t[-1]
+            ##if the path its                
+                    elif path.exists(src) and os.path.isdir(src+'/'+entry) and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles):
+                        #this generally means that the path is a directory. we look inside to see if there are any excel files that look like pr files.
+                        datafile=[]
+                        contentsfile=[]
+                        pth=src+'/'+entry; #store the full path of the directory.
+                        #look for 
+                        files=os.listdir(pth)
+                        hasExcel=0;
+                        for f in files:
+                            if f.endswith('.xls') or f.endswith('.xlsx'):
+                                hasExcel+=1;
+                                if f.endswith('contents.xls') or f.endswith('contents.xlsx') or np.array([isinstance(j, str) for j in re.findall("contents",f, flags=re.IGNORECASE)]).any():
+                                    contentsfile=src+'/'+entry+'/'+f
+                                else: #it is not a contents file so we check for, or do preprocessing.
+                                    if self.preprocess==True:
+                                        #                                     if f.endswith('.xslx') and not f.endswith('preprocessed.xlsx'): #freshly preprocess everytime.
+                                        #                                         preprocessExpt(expt, main=self.consensusFL, supporting=self.supportingFL)
+                                        #                                         datafile=src+'/'+entry+'/'+f.split('.xlsx')[0]+'preprocessed.xslx'
+                                        #                                 else:
+                                        if not f.endswith('preprocessed.xlsx'): #if no preprocessing required import file wo preprocessing
+                                            datafile=src+'/'+entry+'/'+f
+                            if hasExcel>=2:
+                                print('directory with excel files will be incorporated.')
+                                #the folder may contain more than one experiments and the name of the experiment may differ from
+                                #that of the folder. therefore we use the experiment filename as a unifying reference
+                                if contentsfile and datafile:
+                                    #creating pr file from scratch
+                                    try:
+                                        p=pr.platereader(datafile, contentsfile)
+                                        exptname=re.split(r'[/\\]', p.name)[-1]
+                                        self.data[exptname]=p 
+                                        print('successfully loaded a platereader experiment '+exptname)
+                                        self.activeExpts.append(exptname)
+                                    except XLRDError:
+                                        print('failed to import experiment: excel file appears to be corrupt.')
+                                        self.failedfiles.append([datafile, contentsfile])
+                                        continue
+                                    except Exception as detail:
+                                        print('failed to import experiment: '+str(detail))
+                                        
+            #pickle.dump(self.data, open('xpr_startingdata.pkl', 'wb'))
+            #pickle.dump(self, open('xprBackup.pkl', 'wb'))
     def preprocessAll(self, fillnans=True, normOD=0.8, extension='preprocessed.xlsx'):
         '''
         preprocessExpt(expt, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' )
@@ -1015,7 +1014,6 @@ class accesspr:
         every experiment can have their own fluorescence. 
         we search for the consensus, and select the consensus as the main fluorescence
         '''
-        
         GFPFields=['GFP' in key for key in self.statcontents.keys()]
         ###Getting fields that contain GFP and are present in all experiments		
         self.consensusFLs=self.statcontents.keys()[GFPFields][np.where([np.around(sum(self.statcontents[field]))== np.size(self.statcontents,0) for field in  self.statcontents.keys()[GFPFields]])]
@@ -1120,23 +1118,31 @@ class accesspr:
         Arguments:
         verbose: prints the contents of every experiment to screen.
         '''
-        D = self.data
         self.allmedia=set()
         self.allstrains=set()
         self.allexperiments=[]
-        for exp in D.keys():
+        for exp in self.data.keys():
             self.allexperiments.append(exp)
+            self.exptInfo[exp]= {}
+            self.exptInfo[exp]['type']='datasheet'
+            self.exptInfo[exp]['datapath']=self.data[exp].name+'.xlsx'
+            self.exptInfo[exp]['contentspath']=self.data[exp].aname
+            self.experimentDuration[exp]=self.data[exp].t[-1]
+            try:
+                self.exptInfo[exp]['contentspath']=self.data[exp].aname
+            except:
+                print('failed to find a contents file name')
             if verbose==True:
                 print('\n\nExperiment ('+exp+') contains:\n------------------ ')
-            for media in D[exp].d.keys():
+            for media in self.data[exp].d.keys():
                 if verbose==True:
                     print('\nMedium ('+media+'): ',)
                 self.allmedia.add(media)
-                for strain in sorted(D[exp].d[media].keys()):
+                for strain in sorted(self.data[exp].d[media].keys()):
                     if verbose==True:
                         print( strain +',')
                     self.allstrains.add(strain)
-                
+        self.checkallstats()
     def containsstat(self, stat, printstats=False):
         '''checks whether the experiments contain the given statistic stat.
         '''
@@ -1157,8 +1163,6 @@ class accesspr:
                         self.statcontents.loc[key, stat]=0
                     if printstats==True:
                         print(self.statcontents)
-    #def backup(self):
-    #    '''generates numbered backup pickles to backtrack processing in case something fails'''
     def resetFL(self):
         '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
         for expt in self.allexperiments:
