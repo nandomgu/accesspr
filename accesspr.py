@@ -1159,6 +1159,7 @@ class accesspr:
                     if verbose==True:
                         print( strain +',')
                     self.allstrains.add(strain)
+        self.getvariables()
         self.checkallstats()
     def containsstat(self, stat, printstats=False):
         '''checks whether the experiments contain the given statistic stat.
