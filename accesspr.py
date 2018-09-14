@@ -500,26 +500,41 @@ class accesspr:
     self.allreplicates contains the condition in every well in every experiment
     self.plotReplicateMeanNew() and self.interptimesnew now work with replicate dataframes as an input to include specific replicates
     self.getRawData() creates a raw data dictionary to handle the full pr output altogether.
-    ATTRIBUTES:
+    -----------------------------------------------------------------------------------------------------------
+    ATTRIBUTES: 
+    
+    The attributes of accesspr allow you to know what is in your experiments and what stage of the processing they are in. 
+    
     source: 
         the path of the folder that contains the pickle files
     data:
         a dictionary of platereader objects, corresponding to each experiment in each pickle file. 
         The keys are each experiment's pickle file name. e.g. xpr.data[picklefilename].d[media][strain]
+    allreplicates:
+        a pandas dataframe of the experiment, media, strain and plate localisation of each replicate in the experiment ensemble.
     allContents:
         a pandas dataframe containing all unique combinations of strains and media found in all experiments. 
     statcontents:
-        a pandas dataframe describing whether each expe
-    extractionFields: 
-        name of the columns of all the features to be extracted when calling self.extractRepInfo() and self.extractAllInfo()
+        a pandas dataframe describing what statistics are in which experiment, and the fraction (0-1) of conditions 
+        in that experiment that have such statistic. By default it looks for tme varying statistics, but you can search for other statistics using
+        self.containsstat(statname)
+    extractionFieldsScalar: 
+        Point statistics to be extracted when making dataframes through self.makedataframe('notime'). By default this includes all point statistics
+        found in the experiments, but more can be added.
+    extractionFieldsTime: 
+       Time varying statistics/measurements that are present in at least one experiment. Suc statistics can be extracted 
+       using xpr.makedataframe('timerow') or xpr.makedataframe('timecol', times=[x1,x2,x3...])
     allstrains: 
         contains a nonredundant list of all strains found in the experiments.
     allmedia:
         contains a nonredundant list of all media found in the experiments.
-    allExperiments:
-        contains a nonredundant list of all experiments in the accesspr object.
-    aligned:
-        indicates whether the experiments have been aligned in time by the max growth rate and the max Fluorescence (see method alignAll) 
+    exptInfo:
+        dictionary of paths for all the experiments loaded. 
+        self.exptInfo[exptname]
+                               ['datapath']
+                               ['contentspath']
+    allexperiments:
+        contains a nonredundant list of all experiments in the accesspr object. 
     FL: 
         a dictionary that contains the default fluorescence channels to be used for every experiment. can be changed manually or by calling
         xpr.assignFL()
@@ -527,13 +542,14 @@ class accesspr:
         a dictionary (with experiment keys) that contains the machine in which this experiment was run. currently identified machines are 'Plate Reader 1' and 'Plate Reader 2'
     serialnumbers:
         a dictionary (with experiment keys) that contains the machine serial number. even if the machine has no identified human-readable name (see machines), the serialnumber will be stored here.
+    -------------------------------------------------------------------
     METHODS: (*:runs during initialization)
     To create an accesspr object, 
+        xpr=accesspr(PICKLEFOLDERPATH, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True):
+            initializes an accesspr instance by using the files in path or list of paths PICKLEFOLDERPATH. 
+            ignoreFiles is a list of the file names in this folder that should be ignored.
+    The paths of any experiments that fail to import will be added to the xpr.failedfiles list.
     
-        xpr=accesspr(PICKLEFOLDERPATH, ignoreFiles=False):
-            initializes an accesspr instance by using the files in path PICKLEFOLDERPATH. 
-            ignoreFiles is a list of the '*.pkl' file names in this folder that wish to be ignored.
-            
     To interrogate about experiment contents and keep track of experiment processing,
     
         * getAllContents(self):
@@ -553,10 +569,10 @@ class accesspr:
             retrieves a list of experiments that contain media MEDIA and strain STRAIN. 
             Internally sets the temporary property containslist to this experiment list. 
         
-        plotRawReplicates(self, MEDIA, STRAIN, dtype='OD', exptColors=False):
+        plotrawreplicates(self, MEDIA, STRAIN, dtype='OD', exptColors=False):
             plots the raw repicates of dtype VS time of a specific strain or media, for all the experiments that contain that specific condition.
             if exptColors is not specified, then random colors are assigned to each experiment and returned as a function output.
-        plotReplicateMean(self, MEDIA, STRAIN, dtype='')
+        plotrepmean(self, MEDIA, STRAIN, dtype='')
             uses interpTimes to align and interpolate replicates across experiments and creates a mean± std line plot for each media in MEDIA
         findMachines()
             finds the machine wher this experiment was run by looking into several places: first, in pr.machine, then in the experiment file.
@@ -679,7 +695,7 @@ class accesspr:
             for a given strain and condition, runs interpTimes and plots the mean ± standard deviation (shaded area) over time for the combined replicates. 
             It operates on the current figure, so multiple plots can be overlayed.
             
-        plotRawReplicates(self, MEDIA, STRAIN, dtype='OD', exptColors=False):
+        plotrawreplicates(self, MEDIA, STRAIN, dtype='OD', exptColors=False):
             plots the raw within-experiment replicates of dtype VS time of a specific strain or media, for all the experiments that contain that specific condition.
             if exptColors is not specified, then random colors are assigned to each experiment. 
             Not suitable for FLperod or gr, as it needs the statistic
@@ -730,6 +746,7 @@ class accesspr:
 
     def __init__(self, source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True):
         '''
+        obj=acesspr( source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True)
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
         '''
         self.date=datetime.today().strftime('%Y-%m-%d')
@@ -1488,9 +1505,15 @@ class accesspr:
                 print( str(self.statcontents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statcontents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statcontents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             print('Experiments have already been aligned. to realign, try rerun=True')
             self.getvariables()
-    def plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, exceptionShift=0.01, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=0, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
+    def plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=5, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
-        '''plots mean plus shaded area across all replicates. returns the mean coefficient of variation across replicates.'''
+        '''
+        intepdata, factorcolors, factormarkers=plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=5, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left')
+        Interpolates and bootstraps replicates of the same condition, and plots the mean and standard deviation of such bootstraps. 
+        **TIP** 
+        You can provide a conditions Dataframe (conditionsDF=DF)  in the format of self.allreplicates, and provide a factor=FACTOR, 
+        to subdivide all those replicates by their category in FACTOR. e.g. factor='strain' will group the replicates by strain
+        '''
         if centeringVariable=='Time centered at gr peak':
             print('removing null and expts without estimated growth rate')
             if isinstance(strain, list):
@@ -1642,7 +1665,7 @@ class accesspr:
         plt.legend(legends, loc = 'upper right')
         plt.show(block=False)
 
-    def plotRawReplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, experiments='all', exptColors=False, addLegend=True, xstat=[], color=False):
+    def plotrawreplicates(self, media, strain, dtype='OD',xlim=False, ylim=False, experiments='all', exptColors=False, addLegend=True, xstat=[], color=False):
         markers=['o', 's', '^', 'x', '*', 'h','+', 'v', 'p', '>','o', 's', '^', 'x', '*', 'h','+', 'v', 'p', '>','o', 's', '^', 'x', '*', 'h','+', 'v', 'p', '>']
         self.containssetup(media, strain, strict=False)
         if exptColors==False:
