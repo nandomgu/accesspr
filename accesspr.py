@@ -487,7 +487,7 @@ def preprocessExpt(expt, fillnans=True, standardize=False, normOD=0.8, extension
 
 class accesspr:	
     '''
-    accesspr version 4.81(the number matches with that of the compatible platereader software version)
+    accesspr version 4.87(the number matches with that of the compatible platereader software version)
     
     accesspr is a class that allows to integrate and organize the information
     from many plate reader experiments to produce publication-grade plots and tables. 
@@ -495,11 +495,9 @@ class accesspr:
     to learn about pandas (especially dataframes) and the seaborn graphics package. 
     
     ***Newest FEATURES***
+    self.assignFL() now receives a list of many potential main fluorescence channel names and you can provide a list of experiments.
     self.getvariables() call this to update all variables available at least once i all your experiment colleciton.
-    self.makedataframe() can now extract information robustrly across all experiments in scalar or 2 time formats. 
-    self.allreplicates contains the condition in every well in every experiment
-    self.plotReplicateMeanNew() and self.interptimesnew now work with replicate dataframes as an input to include specific replicates
-    self.getRawData() creates a raw data dictionary to handle the full pr output altogether.
+    self.makedataframe() can now extract information robustly across all experiments in scalar or 2 time formats. 
     -----------------------------------------------------------------------------------------------------------
     ATTRIBUTES: 
     
@@ -552,7 +550,7 @@ class accesspr:
     
     To interrogate about experiment contents and keep track of experiment processing,
     
-        * getAllContents(self):
+        * getallcontents(self):
              produces self.allconditions attribute (see attributes)
              
         * containsstat(self, STAT):
@@ -561,9 +559,10 @@ class accesspr:
         * listcontents(self, verbose=True):
             fills the allstrains and allmedia attributes. If verbose==True, produces a human-readable display of the contents of each experiment.
             
-        *assignFL(mainFL='noFL', mainFLperod='noFLperod')
+        *assignFL(mainFL='noFL', mainFLperod='noFLperod', experiments=False)
             if arguments are specified, sets the given channels as the  default fluorescence channels for each experiment. 
-            if arguments are unspecified, looks for consensus fluorescence amongst experiments. Otherwise sets GFP as default.
+            if arguments are unspecified, sets GFP as default.
+            You can specify a list of fluorescence channels to be found in an experiment in order of priority. (if one is not found, then the next one is searched)
         
         containssetup(self, MEDIA,STRAIN):
             retrieves a list of experiments that contain media MEDIA and strain STRAIN. 
@@ -598,7 +597,7 @@ class accesspr:
         
     Data processing and extraction for a specific media and strain
         
-        interpTimes(self, media, strain, dtype='FLperod', centeringVariable='gr', upperLim=16, exceptionShift=0.01, ignoreExps=False)
+        interptimesnew(conditionsDF, dtype='FLperod', centeringVariable='gr', upperLim=16, exceptionShift=0.01, ignoreExps=False, factor=False)
             Creates a sub dataset such that time-varying property dtype is sampled at the same times across replicates.
             This is important because the exact sampling times might vary across replicates.
             returns a dictionary with two keys:
@@ -629,7 +628,7 @@ class accesspr:
 
     Data processing and extraction of all accesspr information
         
-        extractAllInfo(self, excludeNull=False)
+        extractallinfonew(self, excludeNull=False)
             extracts the information of all replicates for all conditions. 
             returns a dataframe most single point statistics and string-formatted- time series of each condition's replicate info. 
             the statistics deployed and the order (currently fixed) can be found in the self.extractionFields attribute.
@@ -767,7 +766,7 @@ class accesspr:
         #activeExperiments is an array the list of currently relevant pickle files meant to be loaded onto memory.
         #this list is modified by contains functions
         self.activeExpts=[];
-        self.version='4.84'
+        self.version='4.87'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
         self.allconditions=pd.DataFrame()
         self.loadInitial()
@@ -780,10 +779,10 @@ class accesspr:
         self.extractionFieldsOD=['experiment', 'machine','media','strain','InitialOD','FinalOD','lagTime','realTime','alignedTime','maxGR','maxGRvar','maxGRTime','grAUC']
         self.extractionFieldsGrowth=['d/dtgr var','time of max gr','time of max gr var','local max gr','OD gp','doubling time var', 'doubling time', 'max OD', 'lag time', 'max gr', 'max gr var']
         self.extractionFieldsFL=['FLPeak','absolutePeakTime','alignedPeakTime','responseTime','responseTimeAligned','halfFL','normalizedFLPeak','slope','steepness']
-        self.mediaValue={'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2, 'SucGlu 1%': 0.5, 'SucGlu 1.8% 0.2%': 0.2/2, 'SucGlu 0.2% 1.8%': 1.8/2}
+        self.mediaValue={'Glu 0.05%': 0.05, 'Glu 0.1%': 0.1, 'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2, 'SucGlu 1%': 0.5, 'SucGlu 1.8% 0.2%': 0.2/2, 'SucGlu 0.2% 1.8%': 1.8/2}
         self.strainAlias={'YST_498': 'Hxt1', 'YST_499': 'Hxt1', 'Hxt4': 'Hxt4', 'Hxt2': 'Hxt2','Hxt3': 'Hxt3','Hxt5': 'Hxt5','Hxt6': 'Hxt6','Hxt7n': 'Hxt7' }
-        self.listcontents(verbose=False)
-        #self.getAllContents()
+        self.listcontents(verbose=False) ## indexes experiments, runs getvariables(), checkallstats() and getallcontents
+        #self.getallcontents()
         self.strainColors=False ##### list of colours to be assigned to each strain in plotting routines. currently not in use.
         self.mediaColors=False ##### list of colours to be assigned to each media during plotting routines. currently not in use.
         self.exptColors=False  ##### list of colours to be assigned to each media during plotting routines. currently not in use.
@@ -800,10 +799,6 @@ class accesspr:
         self.normStandard['channel']='AutoFL'
         self.normStandard['OD']=0.4 
         #self.getNormFactor()
-        try:
-            self.getAllContents()
-        except:
-            print('Impossible to get  allContents list for all experiments.')
         self.refstrains=dict()
         self.getvariables(verbose=False)
         self.checkallstats()
@@ -815,12 +810,8 @@ class accesspr:
             self.consensusFLperod=FLperod
             self.supportingFL='GFP60'
             for key in self.data.keys():
-                self.FL[key]={}
-            try:    
-                self.assignFL(mainFL=FL, mainFLperod=FLperod)
-            except:
-                print('problems finding consensus fluorescence')
-                self.assignFL(mainFL='GFP')
+                self.FL[key]={}  
+            self.assignFL(mainFL=FL, mainFLperod=FLperod)
         else:
             self.analyseFL=False
         try:
@@ -849,7 +840,7 @@ class accesspr:
         self.extractionFieldsTime=list(np.unique(timevars))
         if verbose==True:
             print('Scalar variables registered (found in self.extractionFieldsScalar:\n'+'\n'.join(self.extractionFieldsScalar)+'\n')
-            print('Time-varying variables registered (found in self.extractionFieldsScalar:\n'+'\n'.join(self.extractionFieldsTime)+'\n')
+            print('Time-varying variables registered (found in self.extractionFieldsTime:\n'+'\n'.join(self.extractionFieldsTime)+'\n')
     def checkallstats(self):
         self.statcontents=pd.DataFrame( index= list(self.data.keys()))
         for k in self.defaultStats+self.extractionFieldsTime:
@@ -891,6 +882,7 @@ class accesspr:
         1. pickles created with the pickle library
         2. folders, each containing two excel datasheets: a) data file and b)contents file (characterised by ending in contents.xls or contents.xlsx
         '''
+        print('accesspr version'+self.version)
         if isinstance(self.source, str):
             self.source=[self.source]
         for src in self.source:
@@ -946,7 +938,8 @@ class accesspr:
                                         continue
                                     except Exception as detail:
                                         print('failed to import experiment: '+str(detail))
-                                        
+                                        self.failedfiles.append([datafile, contentsfile])
+                                        continue
             #pickle.dump(self.data, open('xpr_startingdata.pkl', 'wb'))
             #pickle.dump(self, open('xprBackup.pkl', 'wb'))
     def preprocessAll(self, fillnans=True, normOD=0.8, extension='preprocessed.xlsx'):
@@ -1026,79 +1019,125 @@ class accesspr:
                 except:
                     print('could not extract machine info from source file. Machine left unknown.')					
                     self.machines[expt]= np.nan
-    def assignFL(self, mainFL='noFL', mainFLperod='noFLperod'):
+    def assignFL(self, mainFL='noFL', mainFLperod='noFLperod', experiments=False):
         '''
-        every experiment can have their own fluorescence. 
-        we search for the consensus, and select the consensus as the main fluorescence
+        assignFL(self, mainFL='noFL', mainFLperod='noFLperod', experiments=False)
+        
+        Assigns fluorescence channel(s) mainFL as the main fluorescence channel(s) to be extracted.
+        This allows to deal with heterogeneous channel names that are equivalent data.
+        
+        if no mainFL is declared, GFP is assigned as the main fluorescence channel. 
+        such main FL channel is stored under the xpr.FL dictionary, and is called by 
+        xpr.makedataframe('notime') to create fields 'FL'...  and 'FLOD'...
+        You can specify a list of fluorescence channels to be found in an experiment in order of priority.
+        (if one is not found, then the next one is searched)
+        if experiments is given, then the fluorescence is assigned only for the given list of experiment, otherwise to all experiments.
+        This routine runs by default during initial loading of the accesspr object.
         '''
+        if experiments== False:
+            experiments=list(self.data.keys())
         GFPFields=['GFP' in key for key in self.statcontents.keys()]
         ###Getting fields that contain GFP and are present in all experiments		
         self.consensusFLs=self.statcontents.keys()[GFPFields][np.where([np.around(sum(self.statcontents[field]))== np.size(self.statcontents,0) for field in  self.statcontents.keys()[GFPFields]])]
-        
-        if mainFL!= 'noFL':  ###priority to specified fluorescence
+        if mainFL=='noFL' and mainFLperod=='noFLperod' and self.analyseFL==True:
+            print('No consensus fluorescence was found. please specify fluorescence channels to work with. Defaulting to GFP.')
+            fl='GFP'
             for expt in self.data.keys():
-                self.FL[expt]['mainFL']=mainFL
-                if mainFL in list(self.consensusFLs)==False:
-                    print('Warning: '+mainFL+' is not a consensus Fluorescence. Consider changing or leaving unspecified')
-        if mainFLperod!= 'noFLperod':  ###priority to specified fluorescence per OD
-            for expt in self.data.keys():
-                self.FL[expt]['mainFLperod']=mainFLperod
-                if mainFLperod in list(self.consensusFLs)==False:
-                    print('Warning: '+mainFLperod+' is not a consensus Fluorescence per od. Consider changing or leaving unspecified')
-
-        if mainFLperod in list(self.consensusFLs)==False and mainFL in list(self.consensusFLs): ##if the fl channel is there but there is no cfl for that:
-            mainFLperod='c-'+mainFL+'perod' ##we force the FLperod to match FL
-            for expt in self.data.keys():
-                self.FL[expt]['mainFLperod']=mainFLperod
-                self.FL[expt]['mainFLperodvar']=mainFLperod+'var'
-        
-        #if there is no specification, we look for consensus
-        if mainFL=='noFL' and mainFLperod=='noFLperod' and np.size(self.consensusFLs)>0: # there is a consensus but was not specified in the arguments
-            flag=0;
-            allFLODs=self.consensusFLs[['perod' in j for j in list(self.consensusFLs)]] 
-            allFLs=self.consensusFLs[['perod' in j==False for j in list(self.consensusFLs)]] 
-            if np.size(allFLODs)>0: ###if there was any perod in the consensus
-                if np.size(allFLODs)>1: ## if there is more than one, we select the first one as a default
-                    print('More than one consensus FLperod detected. Assigning '+str(allFLODs[0])+' as the default.')
-                mainFLperod=str(allFLODs[0])
-                for expt in self.data.keys():
-                    self.FL[expt]['mainFLperod']=mainFLperod
-                    self.FL[expt]['mainFLperodvar']=mainFLperod+'var'
-                    
-            if np.size(allFLs)>0: ###if there was any FL in the consensus
-                if np.size(allFLs)>1: ## if there is more than one, we select the first one as a default
-                    print('More than one consensus FL detected. Assigning '+str(allFLs[0])+' as the default.')
-                mainFL=str(allFLs[0])
-                for expt in self.data.keys():
-                    self.FL[expt]['mainFL']=mainFL
+                self.FL[expt]['mainFL']=fl
+                self.FL[expt]['mainFLperod']='c-'+fl+'perod'
+                self.FL[expt]['mainFLperodvar']='c-'+fl+'perod var'
         else:
-            if np.size(self.consensusFLs)==0:
-                print('No consensus fluorescence was found. please specify fluorescence channels to work with. Defaulting to GFP.')
-                fl='GFP'
-                for expt in self.data.keys():
-                    self.FL[expt]['mainFL']=fl
-                    self.FL[expt]['mainFLperod']='c-'+fl+'perod'
-                    self.FL[expt]['mainFLperodvar']='c-'+fl+'perodvar'
-            if mainFL!='noFL':
-                print('\n Adding '+mainFL+' as a consensus. Please correct autofluorescence using this channel.') ### if no consensus but there was mainFL inserted
-                for expt in self.data.keys():
-                    self.FL[expt]['mainFL']=mainFL
-                    self.FL[expt]['mainFLperod']='c-'+mainFL+'perod'
-                    self.FL[expt]['mainFLperodvar']='c-'+mainFL+'perodvar'
-            else:
-                if mainFLperod!='noFLperod':
-                    fl= mainFLperod.split('perod')[0]
-                    try:
-                        fl=fl.split('c-')[1]
-                    except:
-                        print('channel name does not include leading c-') 
-                    print('adding '+mainFLperod+' as a consensus corrected fluorescence. assuming raw Fluorescence to be '+fl+'. Please correct if necessary') ### if no consensus but there was mainFL inserted
-                    for expt in self.data.keys():
-                        self.FL[expt]['mainFL']=fl
-                        self.FL[expt]['mainFLperod']='c-'+mainFL+'perod'
-                        self.FL[expt]['mainFLperodvar']='c-'+mainFL+'perodvar'
-                else:
-                    print(' \nplease add fluorescence channels manually. \ncheck the contents using xpr.containsstat() and xpr.statcontents.')
+            if isinstance( mainFL, str):
+                mainFL=[mainFL]
+            if isinstance(mainFLperod, str):
+                mainFLperod=[mainFLperod]
+            assigned={};
+            for expt in experiments:
+                assigned[expt]=0
+            for j in range(0, np.size(mainFL)):
+                if mainFL[j]!= 'noFL':
+                    for expt in experiments:
+                        self.containsstat(mainFL[j], printstats=False) #making sure it is there if at all , if the field is not a string or is unassigned
+                        if ( mainFL[j] in self.statcontents.columns and self.statcontents.loc[expt, mainFL[j]]>0): # ((ppf.hasKey(self.FL[expt], 'mainFL') and ((not isinstance(self.FL[expt]['mainFL'], str)) or self.FL[expt]['mainFL']=='unassigned'))) :
+                            #print('about to substitute'+self.FL[expt]['mainFL'] )
+                            if assigned[expt]==0:
+                                self.FL[expt]['mainFL']=mainFL[j]
+                                self.FL[expt]['mainFLperod']='c-'+mainFL[j]+'perod'
+                                self.FL[expt]['mainFLperodvar']='c-'+mainFL[j]+ 'perod var'
+                                assigned[expt]=1
+                        else:
+                            self.FL[expt]['mainFL']='unassigned'
+            for j in range(0, np.size(mainFLperod)):
+                if mainFLperod[j]!= 'noFLperod':  ###priority to specified fluorescence per OD
+                    for expt in experiments:
+                        self.containsstat(mainFLperod[j], printstats=False) #making sure it is there if at all  
+                        self.FL[expt]['mainFLperod']=mainFLperod[j]
+                        self.FL[expt]['mainFLperodvar']='c-'+mainFL[j]+'perod var'
+                        #print(mainFLperod[j]+' does not seem to exist for '+expt)
+    #         if mainFL!= 'noFL':  ###priority to specified fluorescence
+#             for expt in experiments:
+#                 self.FL[expt]['mainFL']=mainFL
+#                 if mainFL in list(self.consensusFLs)==False:
+#                     print('Warning: '+mainFL+' is not a consensus Fluorescence. Consider changing or leaving unspecified')
+#         if mainFLperod!= 'noFLperod':  ###priority to specified fluorescence per OD
+#             for expt in experiments:
+#                 self.FL[expt]['mainFLperod']=mainFLperod
+#                 self.FL[expt]['mainFLperodvar']=mainFLperod+' var'
+#                 if mainFLperod in list(self.consensusFLs)==False:
+#                     print('Warning: '+mainFLperod+' is not a consensus Fluorescence per od. Consider changing or leaving unspecified')
+# 
+#         if mainFLperod in list(self.consensusFLs)==False and mainFL in list(self.consensusFLs): ##if the fl channel is there but there is no cfl for that:
+#             mainFLperod='c-'+mainFL+'perod' ##we force the FLperod to match FL
+#             for expt in experiments:
+#                 self.FL[expt]['mainFLperod']=mainFLperod
+#                 self.FL[expt]['mainFLperodvar']=mainFLperod+' var'
+#         
+#         #if there is no specification, we look for consensus
+#         if mainFL=='noFL' and mainFLperod=='noFLperod' and np.size(self.consensusFLs)>0: # there is a consensus but was not specified in the arguments
+#             flag=0;
+#             allFLODs=self.consensusFLs[['perod' in j for j in list(self.consensusFLs)]] 
+#             allFLs=self.consensusFLs[['perod' in j==False for j in list(self.consensusFLs)]] 
+#             if np.size(allFLODs)>0: ###if there was any perod in the consensus
+#                 if np.size(allFLODs)>1: ## if there is more than one, we select the first one as a default
+#                     print('More than one consensus FLperod detected. Assigning '+str(allFLODs[0])+' as the default.')
+#                 mainFLperod=str(allFLODs[0])
+#                 for expt in self.data.keys():
+#                     self.FL[expt]['mainFLperod']=mainFLperod
+#                     self.FL[expt]['mainFLperodvar']=mainFLperod+'var'
+#             if np.size(allFLs)>0: ###if there was any FL in the consensus
+#                 if np.size(allFLs)>1: ## if there is more than one, we select the first one as a default
+#                     print('More than one consensus FL detected. Assigning '+str(allFLs[0])+' as the default.')
+#                 mainFL=str(allFLs[0])
+#                 for expt in self.data.keys():
+#                     self.FL[expt]['mainFL']=mainFL
+#         else:
+#             if np.size(self.consensusFLs)==0:
+#                 print('No consensus fluorescence was found. please specify fluorescence channels to work with. Defaulting to GFP.')
+#                 fl='GFP'
+#                 for expt in self.data.keys():
+#                     self.FL[expt]['mainFL']=fl
+#                     self.FL[expt]['mainFLperod']='c-'+fl+'perod'
+#                     self.FL[expt]['mainFLperodvar']='c-'+fl+'perodvar'
+#             if mainFL!='noFL':
+#                 print('\n Adding '+mainFL+' as a consensus. Please correct autofluorescence using this channel.') ### if no consensus but there was mainFL inserted
+#                 for expt in self.data.keys():
+#                     self.FL[expt]['mainFL']=mainFL
+#                     self.FL[expt]['mainFLperod']='c-'+mainFL+'perod'
+#                     self.FL[expt]['mainFLperodvar']='c-'+mainFL+'perodvar'
+#             else:
+#                 if mainFLperod!='noFLperod':
+#                     fl= mainFLperod.split('perod')[0]
+#                     try:
+#                         fl=fl.split('c-')[1]
+#                     except:
+#                         print('channel name does not include leading c-') 
+#                     print('adding '+mainFLperod+' as a consensus corrected fluorescence. assuming raw Fluorescence to be '+fl+'. Please correct if necessary') ### if no consensus but there was mainFL inserted
+#                     for expt in self.data.keys():
+#                         self.FL[expt]['mainFL']=fl
+#                         self.FL[expt]['mainFLperod']='c-'+mainFL+'perod'
+#                         self.FL[expt]['mainFLperodvar']='c-'+mainFL+'perodvar'
+#                 else:
+#                     print(' \nplease add fluorescence channels manually. \ncheck the contents using xpr.containsstat() and xpr.statcontents.')
                 
                 #                 
                 #                 
@@ -1138,6 +1177,9 @@ class accesspr:
         self.allmedia=set()
         self.allstrains=set()
         self.allexperiments=[]
+        self.getvariables()
+        self.checkallstats()
+        self.getallcontents()
         for exp in self.data.keys():
             self.allexperiments.append(exp)
             self.exptInfo[exp]= {}
@@ -1161,7 +1203,8 @@ class accesspr:
                     self.allstrains.add(strain)
         self.getvariables()
         self.checkallstats()
-    def containsstat(self, stat, printstats=False):
+        self.getallcontents()
+    def containsstat(self, stat, printstats=True):
         '''checks whether the experiments contain the given statistic stat.
         '''
         for key in self.data.keys():
@@ -1179,8 +1222,8 @@ class accesspr:
                 else:
                     if stat=='gr': #in the special case that we are dealing with gr, we really want to know if it is 0.
                         self.statcontents.loc[key, stat]=0
-                    if printstats==True:
-                        print(self.statcontents)
+        if printstats==True:
+            print(self.statcontents)
     def resetFL(self):
         '''resets the processing of fluorescence in order to start from scratch in case something went wrong'''
         for expt in self.allexperiments:
@@ -1197,7 +1240,6 @@ class accesspr:
         strict: retrieves just the experiments that contain media, strain and musthave. if False, experiments are filtered on the basis of media and strain only.
          This is relevant for some routines that require growth rate.
         '''
-        D = self.data
         self.media = media
         self.strain = strain
         self.nofod = []
@@ -1227,9 +1269,9 @@ class accesspr:
         sd=list(self.allmedia)
         return [sd[c] for c in np.where([strng in j for j in  self.allmedia])[0]]
     
-    def getAllContents(self):
+    def getallcontents(self):
         '''
-        getAllContents(self)
+        getallcontents(self)
         creates two dataframes in the accesspr object:
             self.allconditions.- a dataframe of unique media/strain conditions in all experiments (useful for looping through all conditions once)
             self.allcontents.- a dataframe containing reating experiment, media, strain and plate locations of each condition.
@@ -1251,7 +1293,7 @@ class accesspr:
         '''
         if experiments=='all':
             experiments=list(self.data.keys())
-        self.containsstat('c-'+f[0]+'perod')
+        self.containsstat('c-'+f[0]+'perod',printstats=False)
         for key in experiments: 
             #if self.statcontents.loc[key, 'c-'+f[0]+'perod']==1 and rerun==False:
             #    print('Experiment ', key, ' already contains FLperod')
@@ -1275,7 +1317,7 @@ class accesspr:
             if path.isdir(self.source):
                 pickle.dump(self.data[key], open(self.source + '/' +key, 'wb'))
                 print('Experiment pickle file'+ self.source+key+' has been replaced.')
-        self.containsstat('c-'+f[0]+'perod')
+        self.containsstat('c-'+f[0]+'perod',printstats=False)
 
     def statDerivative(self, dtype='FLperod', experiments='all',media='all', strains='all', rewrite=False, rerun=False):
         ''' function designed to obtain a simple gradient (derivative) of any stat inside the experiments
@@ -1387,7 +1429,7 @@ class accesspr:
             #    if path.isdir(self.source):
             #        pickle.dump(self.data[key], open(self.source + '/' +key, 'wb'))
             #        print('Experiment pickle file'+ self.source+key+' has been replaced.')
-        self.containsstat('gr')
+        self.containsstat('gr',printstats=False)
         self.getvariables()
 
     def align(self, media, strain, alignFL=False):
@@ -1491,9 +1533,9 @@ class accesspr:
                         self.align(media[x], strains[x], alignFL=alignFL)
                         #print('aligning media '+media[x]+';strain: '+strains[x])
                         #plt.plot(media[x], strains[x], alignFL=alignFL)
-            self.containsstat('gr')
-            self.containsstat('Time centered at gr peak')
-            self.containsstat('Time centered at FL peak')
+            self.containsstat('gr',printstats=False)
+            self.containsstat('Time centered at gr peak',printstats=False)
+            self.containsstat('Time centered at FL peak',printstats=False)
             if 'Time centered at gr peak' in list(self.statcontents.columns.values):
                 grAlignedFraction=self.statcontents['Time centered at gr peak'].sum()/ np.size(self.statcontents['Time centered at gr peak'])
             else:
@@ -2010,18 +2052,23 @@ class accesspr:
         growthdata['max OD raw']=[self.extractMaxODFull(  replicateDF.loc[j,:].values[0],replicateDF.loc[j,:].values[1], replicateDF.loc[j,:].values[2], replicateDF.loc[j,:].values[3]) for j in range(0, len(replicateDF))]
         nfl=self.consensusFL
         FLData={};
-        getalstFL=lambda expt, m,s,fl: alignStats(expt, m, s, dtype=nfl)
-        alloutsFL=[getalstFL(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2], nfl) for j in range(0, len(replicateDF))]
+        getalstFL=lambda expt, m,s,fl: alignStats(expt, m, s, dtype=fl)
+        treatmulti=lambda x: x[0] if np.size(x)>1 else x
+        #print('entering problematic part')
+        alloutsFL=[getalstFL(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2], self.FL[replicateDF.loc[j,:].values[0]]['mainFL']) for j in range(0, len(replicateDF))]
+        #print('transforming into floats')
         for field in flstats:
-            FLData[field]=[np.float(alloutsFL[j][field]) for j in range(0, len(replicateDF))]
+            #print('now for '+field)
+            FLData[field]=[np.float(treatmulti(alloutsFL[j][field])) for j in range(0, len(replicateDF))]
         nflod=self.consensusFLperod
         FLODData={};
-        getalstFLOD=lambda expt, m,s,fl: alignStats(expt, m, s, dtype=nflod)
+        getalstFLOD=lambda expt, m,s,fl: alignStats(expt, m, s, dtype=fl)
         #aligned fluorescence statistics calculation
-        alloutsFLOD=[getalstFLOD(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2],nflod) for j in range(0, len(replicateDF))]
+        alloutsFLOD=[getalstFLOD(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2],self.FL[replicateDF.loc[j,:].values[0]]['mainFLperod']) for j in range(0, len(replicateDF))]
+        alloutsFLODvar=[getalstFLOD(self.data[replicateDF.loc[j,:].values[0]],replicateDF.loc[j,:].values[1],replicateDF.loc[j,:].values[2],self.FL[replicateDF.loc[j,:].values[0]]['mainFLperodvar']) for j in range(0, len(replicateDF))]
         for field in flstats:
             try:
-                FLODData['FLOD'+field]=[np.float(alloutsFLOD[j][field]) for j in range(0, len(replicateDF))]   
+                FLODData['FLOD'+field]=[np.float(treatmulti(alloutsFLOD[j][field])) for j in range(0, len(replicateDF))]   
             except:
                 FLODData['FLOD'+field]=filler
         return pd.concat([replicateDF, pd.DataFrame.from_dict(mergedicts([growthdata, FLData, FLODData]))], axis=1 )
@@ -2035,19 +2082,19 @@ class accesspr:
                 if np.isnan(self.statcontents.loc[expt, repairWith])==False:
                     ppf.transformEach(self.data[expt], stat1=repairWith, stat2=dtype, plot=True)
                     ppf.replaceStat(self.data[expt], dtype, replaceWith='transformed'+repairWith)
-                    self.containsstat('transformed'+repairWith)
+                    self.containsstat('transformed'+repairWith, printstats=False)
                 else:
                     try:
                         if np.isnan(self.statcontents.loc[expt, 'GFP75'])==False:
                             ppf.transformEach(self.data[expt], stat1='GFP75', stat2=dtype, plot=True)
                             ppf.replaceStat(self.data[expt], 'GFP80', replaceWith='transformedGFP75')
-                            self.containsstat('transformedGFP75')
+                            self.containsstat('transformedGFP75',printstats=False)
                     except:
                         print('no GFP75')
                         if np.isnan(self.statcontents.loc[expt, 'GFP60'])==False:
                             ppf.transformEach(self.data[expt], stat1='GFP60', stat2=dtype, plot=True)
                             ppf.replaceStat(self.data[expt], 'GFP80', replaceWith='transformedGFP60')
-                            self.containsstat('transformedGFP60')
+                            self.containsstat('transformedGFP60',printstats=False)
     #Data extraction minifunctions
     def extractMaxGR(self, expt, media, strain, plateloc):
         return self.data[expt].d[media][strain]['max growth rate']
