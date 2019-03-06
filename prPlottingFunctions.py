@@ -10,7 +10,6 @@ from scipy.interpolate import interp1d
 import scipy
 import seaborn as sns
 from numpy.matlib import repmat
-from colormap import rgb2hex
 import matplotlib
 
 ###PLATE READER PLOTTING FUNCTIONS VERSION 3.1.0.
@@ -132,14 +131,16 @@ def robustCorrect(p, f=['GFP', 'AutoFL'], refstrain='WT'):
 def colorDict(keys, colors=[]):
     if not colors:
         colors= randomColors(np.size(keys))
-    
+    while(np.size(colors)< np.size(keys)):
+        colors.append(randomColors(1)[0])
     return dict(zip(keys, colors))
     
 def transformStat(p, stat, scale, shift, genericLabel=True, excludeNull=False):
     '''Generates a linear transformation of expression values'''
     cl=conditionList(p, excludeNull=excludeNull).values #condition list array
-    for media in cl[:,0]:
-        for strain in cl[:,1]:
+    cl.drop('experiment', axis=1)
+    for media in cl[:,1]:
+        for strain in cl[:,2]:
             if genericLabel==False:
                 p.d[media][strain][stat+'x'+scale+'+'+shift]=p.d[media][strain][stat]*scale+shift
             else:
@@ -153,7 +154,9 @@ def replaceStat(p, stat,replaceWith=0, genericLabel=True, excludeNull=True):
     '''    
     if replaceWith==0:
         replaceWith='transformed'+stat
-    cl=conditionList(p, excludeNull=excludeNull).values
+        
+    cl=conditionList(p, excludeNull=excludeNull)
+    cl=cl.drop('experiment', axis=1).values
     for j in range(0,np.size(cl,0)):
         media=cl[j,0]
         strain=cl[j,1]
@@ -174,7 +177,8 @@ def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, j
     allrvalues=[]
     allmedia=[]
     allstrains=[]
-    cl=conditionList(p, excludeNull=excludeNull).values #condition list array
+    cl=conditionList(p, excludeNull=excludeNull) #condition list array
+    cl=cl.drop('experiment', axis=1).values
     for j in range(0, np.size(cl,0)):
         media=cl[j,0]
         strain=cl[j,1]
@@ -196,7 +200,6 @@ def transformEach(p, stat1, stat2, genericLabel=True, plot=False, report=True, j
         allrvalues.append(np.float(rvalue))
         allmedia.append(media)
         allstrains.append(strain)
-    p.mediacorrected.update({'transformed'+stat1: False})
     p.datatypes.append('transformed'+stat1)       
     p.datatypes=list(np.unique(p.datatypes))
     print(np.size(np.array(allslopes)))
