@@ -93,7 +93,7 @@ class platereader:
         standardgain: if defined, fluorescence measurements are corrected to this gain
         ignorestrains: a list of strains in particular conditions to be ignored, such as ['GAL10 in 0.1% Gal']
         '''
-        self.version= '4.87'
+        self.version= '4.89'
         self.dsheetnumber= dsheetnumber
         self.asheetnumber= asheetnumber
         if '.' not in dname: dname += '.xlsx'
@@ -127,7 +127,7 @@ class platereader:
         if aname:
             # import annotation
             try:
-                r= pd.ExcelFile(self.wdir + aname).parse(asheetnumber)
+                r= pd.read_excel(self.wdir + aname, index_col= 0, sheet_name= asheetnumber)
             except FileNotFoundError:
                 raise(SystemExit("\nError: Can't find " + self.wdir + aname))
         else:
@@ -238,10 +238,9 @@ class platereader:
             dstartindex: index in row where data starts
         '''
         try:
-            xl= pd.ExcelFile(self.wdir + dname)
+            df= pd.read_excel(self.wdir + dname, sheet_number= dsheetnumber)
         except FileNotFoundError:
             raise(SystemExit("\nError: Can't find " + self.wdir + dname))
-        df= xl.parse(dsheetnumber)
         if platereadertype == 'Tecan':
             # for Tecan plate reader post 2015
             df= df.replace('OVER', self.overflow)
@@ -256,8 +255,7 @@ class platereader:
             else:
                 self.machine= 'unknown'
             # find date of experiment
-            idate= np.nonzero(df[df.columns[0]] == 'Date:')[0][0]
-            self.expdate= df.loc[idate, df.columns[1]]
+            self.expdate= df[df.columns[1]].where(df[df.columns[0]] == 'Date:').dropna().iloc[0]
             # time in hours
             itime= np.nonzero(dlabels == 'Time [s]')[0]
             t= df.ix[itime[0]][1:].dropna().values.astype('float')/3600.0
@@ -269,7 +267,7 @@ class platereader:
             # data types
             datatypes= [str(df.ix[it-2][0]) for it in itime]
         elif platereadertype == 'Sunrise':
-            # Sunrise plate reader
+            # Sunrise plate reader : not checked 5/2/2019
             datatypes= ['OD']
             gains= ['']
             # rearrange data
@@ -942,8 +940,8 @@ class platereader:
             # process reference strain
             if 'gp1ref for ' + f[0] not in S[c][refstrain]:
                 print('Warning: reprocessing refstrain', refstrain, 'for', f[0], 'in', c)
-            self.processref1(f, c, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes,
-                             results)
+                self.processref1(f, c, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes,
+                                 results)
             gfr= S[c][refstrain]['gp1ref for ' + f[0]]
             for s in self.getstrains(strains, c, True, strainincludes, strainexcludes):
                 if s != refstrain:
@@ -965,7 +963,11 @@ class platereader:
                         if correctOD:
                             # sample ODs corrected for non-linearities
                             self.gc.predict(S[c][s]['OD'][:,i])
-                            cods= self.gc.sample(nosamples)
+                            if False:
+                                # gives high errors in flperod because sampled corrected ODs can be close to zero
+                                cods= self.gc.sample(nosamples)
+                            else:
+                                cods= gu.tilec(self.gc.f, nosamples)
                         else:
                             cods= gu.tilec(S[c][s]['OD'][:,i], nosamples)
                         # find fluorescence per cell
@@ -1355,8 +1357,8 @@ class platereader:
                             if fldata:
                                 # corrected fluorescence
                                 ax.plot(S[c][s]['time'], S[c][s][dtype], '.', label= s + ' in ' + c)
-                                ax.plot(S[c][s]['time'], S[c][s][dtype] + np.sqrt(var), 'k:', alpha=0.4)
-                                ax.plot(S[c][s]['time'], S[c][s][dtype] - np.sqrt(var), 'k:', alpha=0.4)
+                                ax.plot(S[c][s]['time'], S[c][s][dtype] + np.sqrt(var), 'k:', alpha= 0.4)
+                                ax.plot(S[c][s]['time'], S[c][s][dtype] - np.sqrt(var), 'k:', alpha= 0.4)
                                 # add control to fluorescence data
                                 rname= 'c-' + dtype.split('-')[1].split('perod')[0]
                                 if rname + 'refstd' in S[c][s]:
@@ -1367,7 +1369,7 @@ class platereader:
                                 if plotod and not onefig:
                                     # add OD to plot
                                     ax2= ax.twinx()
-                                    ax2.plot(S[c][s]['time'], S[c][s]['OD mean'] , 'DarkOrange', linewidth=5, alpha=0.2)
+                                    ax2.plot(S[c][s]['time'], S[c][s]['OD mean'] , 'DarkOrange', linewidth= 5, alpha= 0.2)
                             else:
                                 # everything else
                                 if onefig:
@@ -1384,13 +1386,13 @@ class platereader:
                         if fldata:
                             ax.set_ylabel(dtype)
                             ax2.set_ylabel('mean(OD)')
-                            ax.set_ylim(ymin= 0)
-                            ax2.set_ylim(ymin= 0)
+                            ax.set_ylim(bottom= 0)
+                            ax2.set_ylim(bottom= 0)
                         else:
                             plt.ylabel(dtype)
                             if len(plt.gca().get_legend_handles_labels()[1]) == len(pls):
                                 plt.legend(pls, loc= 'lower right')
-                            plt.ylim(ymin= 0)
+                            plt.ylim(bottom= 0)
                         plt.show(block= False)
         if onefig:
             # display and add labels for single figure
@@ -1407,7 +1409,7 @@ class platereader:
                 ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
                 # put legend to the right of the current axis
                 ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-                plt.ylim(ymin= 0)
+                plt.ylim(bottom= 0)
             plt.show(block= False)
         if dtype == 'labels': plt.rcParams["figure.figsize"]= oldparams
 

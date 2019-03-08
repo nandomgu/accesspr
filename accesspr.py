@@ -20,6 +20,7 @@ import colors
 from sklearn.preprocessing import normalize, StandardScaler
 from sklearn.decomposition import PCA  
 import time
+import pdb
 #from decimal import *
 #getcontext().prec = 3
 
@@ -29,70 +30,12 @@ import time
 formatlist=lambda t: [t] if np.size(t)==1 else t
 formatstring=lambda t: t if np.size(t)==1 and len(t)>1 else t[0]
 formatval=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, int) else np.array(t)
-formatnum=lambda t: t[0] if np.size(t)==1 and type(t)==numpy.ndarray  else t 
+formatnum=lambda t: t[0] if np.size(t)==1 and type(t)==np.ndarray  else t 
 formatfloat=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, float) else np.array(t)
 treatmulti=lambda x: x[0] if np.size(x)>1 else x
 fixempty=lambda x: np.nan if not x else x
-
-def pcaplot(self, reps=None, components=[0,1], dtype='OD', times=[0,1,2,3,4,5,6,7,8,9,10,11], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, clicknumber=0):
-    '''function to perform PCA on timevarying observations 
-    '''
-    if not reps:
-        reps=self.allreplicates ##dataframe of conditions
-    fig, ax=plt.subplots(2,2)
-    V=self.makedataframe('timerow', dtype=dtype, times=times, conditionsDF=reps).T.fillna(method='ffill').fillna(0)#get the values of the data frame and transpose them to have the time series.
-    ##we try to fill the nans by extending the last value in the column whenever possible
-    if sum(np.isnan(V.values))>0:
-        print('removing columns that contain nans...\n')
-        nancols=sum(np.isnan(V.values),0)
-        print(V.columns.values[nancols>0]) ##these are the columns that have nans
-        print('\n')
-        V=V[V.columns[nancols==0]].values
-        reps=reps.iloc[find(nancols==0), :]
-    ##we fill the trailing NAs with the last value inserted using the last value of the series. then make all remaining nans a 0 in case some curves are completely nan.
-    if rownorm==True:
-        normrow= lambda row: (row-mean(row))/std(row)
-        xn=V.apply(normrow, axis=1).values
-    else:
-        xn=V.values
-    pca = PCA(n_components=3)
-    pca.fit(xn) # run the pca
-    xpca=pca.transform(xn) # projecting xn onto the pca components
-    if colorby:
-        if np.size(colorby)>1:
-            colorby=colorby[0]
-        if not colorby in reps.columns:
-            print('variable '+colorby+'not in the available features.')
-            #return 0
-        else:
-            classvector=reps[colorby].values
-            varindex=find(reps.columns.values==colorby); 
-            d=ppf.colorDict(keys=np.unique(classvector), colors=color)
-            plt.sca(ax[0][0])
-            plt.scatter(xpca[:, components[0]], xpca[:, components[1]], c=[d[j] for j in classvector])
-            ppf.createFigLegend(dic=d)  
-    else:
-        plt.scatter(xpca[:, components[0]], xpca[:, components[1]]) 
-    time.sleep(0.5)
-    plt.xlabel('Component '+str(components[0]))  
-    plt.ylabel('Component '+str(components[1]))
-    plt.title('PCA of '+dtype)
-    if clicknumber >0:
-        g=0
-        while(g<clicknumber):
-            plt.figure(plt.gcf().number)
-            plt.sca(ax[0][0]);
-            a=plt.ginput(1);
-            subst=[ scipy.spatial.distance.euclidean(np.array([xpca[j, 0], xpca[j, 1]]), a[0]) for j in range(0, np.size(xpca, 0))];
-            print(reps.iloc[np.argmin(subst), :]); plt.sca(ax[0][0]);
-            print(varindex)
-            cl=d[reps.iloc[np.argmin(subst), formatnum(varindex)]];
-            plt.scatter(xpca[np.argmin(subst), 0], xpca[np.argmin(subst), 1], marker='x', c=cl, lw=3);
-            plt.sca(ax[0][1]); plt.plot(xn[np.argmin(subst), :], color=cl);
-            fig.canvas.draw();
-            fig.canvas.flush_events();
-            g+=1
-    return pca
+removenulls= lambda x: x[x['strain']!='null']   #function for hassle free removal of nulls
+  
 def rotatelabels(ax, angle=90):
     [item.set_rotation(angle) for item in ax.get_xticklabels()]   
 def internalStd(rawdata, stat, wtindices, fr=0.4, to=0.7, len=30):
@@ -193,10 +136,19 @@ def DFsubset(df, variable, values):
     '''
     this function filters a dataframe such that dv[variable] only contains the values provided. useful when there is too many elementsfor variable.
     '''
+    #values=formatlist(values) ##making sure that the value is a list even though it might be only one string.
     df2=pd.DataFrame(columns= df.columns)
     for x in values:
         df2=pd.concat([df2, filterDataFrame(df, [variable], [x])])
     df2=df2.reset_index(drop=True)
+    return(df2)
+
+def DFexclude(df, variable, values):
+    '''
+    this function filters a dataframe such that dv[variable] DOES NOT contain the entries with the values provided.    '''
+    values=formatlist(values)
+    newvalues=list(set(df[variable].values) - set(values))  #we obtain all the values in df[variable] discarding the ones in values
+    df2=DFsubset(df, variable, newvalues)
     return(df2)
 
 def digitizeCentered(vector, nbins=10, bins=False, extendBy=2):
@@ -491,6 +443,7 @@ def preprocessExpt(expt, fillnans=True, standardize=False, normOD=0.8, extension
         rawdata[main]=rawdata[supporting]*reg.slope+reg.intercept  
         if correctmachine and machine=='Plate Reader 1':
             rawdata[main]= rawdata[main]*2.26+2.48
+            print('PR1 experiment'+expt.name+'mapped to PR2\n')
         #take the values of supporting at the indices of the missing values of main and then apply the transformation
         #substitution=rawdata[supporting][np.isnan(rawdata[main])]*reg.slope+reg.intercept     
         #rawdata[main][np.isnan(substitution)==False]=substitution[np.isnan(substitution)==False]
@@ -565,14 +518,15 @@ def bootstrapInterps(obj, centeringVariable, dtype, bootstrap=0, plot=True, col=
 
 class accesspr:	
     '''
-    accesspr version 4.87(the number matches with that of the compatible platereader software version)
+    accesspr version 4.89(the number matches with that of the compatible platereader software version)
     
     accesspr is a class that allows to integrate and organize the information
     from many plate reader experiments to produce publication-grade plots and tables. 
-    To fully understand the functionality of accesspr, it is ideal
-    to learn about pandas (especially dataframes) and the seaborn graphics package. 
+    To exploit the functionality of accesspr, it is ideal
+    to learn about pandas dataframes and the seaborn graphics package. 
     
     ***Newest FEATURES***
+    
     self.assignFL() now receives a list of many potential main fluorescence channel names and you can provide a list of experiments.
     self.getvariables() call this to update all variables available at least once i all your experiment colleciton.
     self.makedataframe() can now extract information robustly across all experiments in scalar or 2 time formats. 
@@ -845,7 +799,7 @@ class accesspr:
         #activeExperiments is an array the list of currently relevant pickle files meant to be loaded onto memory.
         #this list is modified by contains functions
         self.activeExpts=[];
-        self.version='4.87'
+        self.version='4.89'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
         self.allconditions=pd.DataFrame()
         if analyseFL==True: #if fl analysis is required, we first fill up the FL fields
@@ -889,10 +843,11 @@ class accesspr:
         self.replicateLocations()
         self.checkallstats()
         self.findMachines()
-        if analyseFL==True:
+        if analyseFL==True and not self.FL:
             for key in self.data.keys():
                 self.FL[key]={}  
             self.assignFL(mainFL=FL, mainFLperod=FLperod)
+            self.assignsupportingFL()
         else:
             self.analyseFL=False
         try:
@@ -994,37 +949,43 @@ class accesspr:
                                 hasExcel+=1;
                                 if f.endswith('contents.xls') or f.endswith('contents.xlsx') or np.array([isinstance(j, str) for j in re.findall("contents",f, flags=re.IGNORECASE)]).any():
                                     contentsfile=src+'/'+entry+'/'+f
+                                    #print('contentsfile:'+contentsfile)
                                 else: #it is not a contents file so we check for, or do preprocessing.
-                                    if self.preprocess==True:
-                                        #                                     if f.endswith('.xslx') and not f.endswith('preprocessed.xlsx'): #freshly preprocess everytime.
-                                        #                                         preprocessExpt(expt, main=self.consensusFL, supporting=self.supportingFL)
-                                        #                                         datafile=src+'/'+entry+'/'+f.split('.xlsx')[0]+'preprocessed.xslx'
-                                        #                                 else:
-                                        if not f.endswith('preprocessed.xlsx'): #if no preprocessing required import file wo preprocessing
-                                            datafile=src+'/'+entry+'/'+f
-                            if hasExcel>=2:
-                                print('directory with excel files will be incorporated.')
-                                #the folder may contain more than one experiments and the name of the experiment may differ from
-                                #that of the folder. therefore we use the experiment filename as a unifying reference
-                                if contentsfile and datafile:
-                                    #creating pr file from scratch
-                                    try:
-                                        p=pr.platereader(datafile, contentsfile)
-                                        exptname=re.split(r'[/\\]', p.name)[-1]
-                                        self.data[exptname]=p
-                                        if self.preprocess==True:
-                                            #pdb.set_trace()
+                                    if not f.endswith('preprocessed.xlsx'): #if no preprocessing required import file wo preprocessing
+                                        datafile=src+'/'+entry+'/'+f
+                                            #print('datafile:'+datafile+'\n')
+                        if hasExcel>=2:
+                            print('directory with excel files will be incorporated.')
+                            #the folder may contain more than one experiments and the name of the experiment may differ from
+                            #that of the folder. therefore we use the experiment filename as a unifying reference
+                            #print('data and contents files: '+ formatstring(datafile)+formatstring(contentsfile))
+                            if contentsfile and datafile:
+                                #creating pr file from scratch
+                                p=pr.platereader(datafile, contentsfile, info=False)
+                                exptname=re.split(r'[/\\]', p.name)[-1]
+                                if ppf.hasKey(self.data, exptname):
+                                    continue
+                                else:
+                                    self.data[exptname]=p
+                                    self.activeExpts.append(exptname)
+                                    print('platereader experiment '+exptname+':\nsuccessfully loaded\n')
+                                    if self.preprocess==True: #we want to preprocess the 
+                                        try:
+                                            self.assignFL(experiments=formatlist(exptname), mainFL=self.consensusFL)
+                                            self.assignsupportingFL(experiments=formatlist(exptname))
                                             self.preprocessAll2(experiments=formatlist(exptname), fillnans=True, normOD=0.8, extension='preprocessed.xlsx',  reload=True)
-                                        print('successfully loaded a platereader experiment '+exptname)
-                                        self.activeExpts.append(exptname)
-                                    except XLRDError:
-                                        print('failed to import experiment: excel file appears to be corrupt.')
-                                        self.failedfiles.append([datafile, contentsfile])
-                                        continue
-                                    except Exception as err:
-                                        print('failed to import experiment: '+str(err))
-                                        self.failedfiles.append([datafile, contentsfile, err])
-                                        continue
+                                            print('successfully preprocessed\n')
+                                        except Exception as err:
+                                            print('problem while preprocessing:'+str(err))
+#                                             except XLRDError:
+#                                                 print('failed to import experiment: excel file appears to be corrupt.')
+#                                                 self.failedfiles.append([datafile, contentsfile])
+#                                                 continue
+#                             except Exception as err:
+#                                 print('failed to import experiment: '+str(err))
+#                                 self.failedfiles.append([datafile, contentsfile, err])
+#                                 continue
+
             #pickle.dump(self.data, open('xpr_startingdata.pkl', 'wb'))
             #pickle.dump(self, open('xprBackup.pkl', 'wb'))
     def getexpt(self, num):
@@ -1057,7 +1018,7 @@ class accesspr:
         print('processed experiments list:')
         print([self.allexperiments[j] for j in np.where(preprocessed)[0]])
         self.loadFresh(exptList= [self.allexperiments[j] for j in np.where(preprocessed)[0]], extension='preprocessed.xlsx') 
-    def assignsupportingFL(self, experiments, candidates):
+    def assignsupportingFL(self, experiments=[], candidates=[]):
         '''
         assignsupportingFL(self, experiments, candidates)
         Finds the supporting fluorescences to be used in each experiment
@@ -1065,15 +1026,15 @@ class accesspr:
         if not candidates:
             candidates=self.supportingFL
         if not experiments:
-            experiments=self.experiments
+            experiments=self.allexperiments
         else:
             experiments=formatlist(experiments)
         for exp in  experiments:
             exp=formatstring(exp)
-            print('experiment'+exp)
+            #print('experiment'+exp)
             candidatecounter=0
             for candidate in self.supportingFL:
-                print('candidate is '+candidate)
+                #print('candidate is '+candidate)
                 if candidate in self.data[exp].datatypes: #self.statcontents.columns and round(self.statcontents.loc[exp, candidate])==1:
                     supporting= candidate
                     print(candidate+' found for '+exp )
@@ -1090,19 +1051,27 @@ class accesspr:
         preprocessExpt(expt, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' )
         preprocess all experiments to fix problems in measurement and normalize data. this version directly replaces the data arrays experiment by experiment.
         '''
+        #pdb.set_trace()
         main=self.consensusFL
         preprocessed=[];
         if not experiments:
-            experiments=self.experiments
+            experiments=self.allexperiments
         else:
             experiments=formatlist(experiments)
         for exp in  experiments:
             exp=formatstring(exp)
-            if not self.FL[exp]['supportingFL']:
+            if not self.FL:
+                self.FL={}
+            if not ppf.hasKey(self.FL, exp):
+                self.FL[exp]={}
+                self.FL[exp]['mainFL']=self.consensusFL
+            if not ppf.hasKey(self.FL[exp], 'supportingFL'):
                 self.assignsupportingFL(exp)
             if self.FL[exp]['supportingFL']=='unassigned':
                 print('experiment does not have a supporting fluorescence')
                 continue
+            else:
+                supporting=self.FL[exp]['supportingFL']
             tdata, p=preprocessExpt(self.data[exp], fillnans=fillnans, extension=extension, supporting=supporting, main=self.consensusFL, machine=self.data[exp].machine)
             print('experiment '+exp+'.- '+ supporting+' used for linear correction of nans in '+self.consensusFL+'. Processed experiment file created')
             cl=ppf.conditionList(self.data[exp])
@@ -1239,7 +1208,7 @@ class accesspr:
             for j in range(0, np.size(mainFL)):
                 if mainFL[j]!= 'noFL':
                     for expt in experiments:
-                        self.containsstat(mainFL[j], printstats=False) #making sure it is there if at all , if the field is not a string or is unassigned
+                        #self.containsstat(mainFL[j], printstats=False) #making sure it is there if at all , if the field is not a string or is unassigned
                         if ( mainFL[j] in self.statcontents.columns and self.statcontents.loc[expt, mainFL[j]]>0): # ((ppf.hasKey(self.FL[expt], 'mainFL') and ((not isinstance(self.FL[expt]['mainFL'], str)) or self.FL[expt]['mainFL']=='unassigned'))) :
                             #print('about to substitute'+self.FL[expt]['mainFL'] )
                             if assigned[expt]==0:
@@ -2102,7 +2071,7 @@ class accesspr:
         centeringVariable: the variable used for the x axis
         descriptors: the final object will contain full descriptor factors for each condition:  expt, media, strain, plateloc
         '''
-        if not replicateMatrix:
+        if not isinstance(replicateMatrix, pd.DataFrame):
             replicateMatrix=self.allreplicates
         #replicateMatrix=replicateMatrix[replicateMatrix['strain']!='null'] ###removing annoying nulls!!! which should have nans in all values yet they don't because.
         #replicateMatrix=replicateMatrix.reset_index(drop=True)
@@ -2337,5 +2306,105 @@ class accesspr:
             return expt.d[m][s][stat]
         else:
             return np.nan
+    def pcaplot(self, reps=None, components=[0,1,2], dtype='OD', times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, clicknumber=0, dotsize=.6, alpha=0.5):
+        '''function to perform PCA on timevarying observations 
+        '''
+        if not isinstance(reps, pd.DataFrame):
+            reps=self.allreplicates ##dataframe of conditions
+        fig, ax=plt.subplots(2,2)
+        V=self.makedataframe('timerow', dtype=dtype, times=times, conditionsDF=reps).T.fillna(method='ffill').fillna(0)#get the values of the data frame and transpose them to have the time series.
+        ##we try to fill the nans by extending the last value in the column whenever possible
+        if sum(np.isnan(V.values))>0:
+            print('removing columns that contain nans...\n')
+            nancols=sum(np.isnan(V.values),0)
+            print(V.columns.values[nancols>0]) ##these are the columns that have nans
+            print('\n')
+            V=V[V.columns[nancols==0]].values
+            reps=reps.iloc[find(nancols==0), :]
+        ##we fill the trailing NAs with the last value inserted using the last value of the series. then make all remaining nans a 0 in case some curves are completely nan.
+        if rownorm==True:
+            normrow= lambda row: (row-mean(row))/std(row)
+            xn=V.apply(normrow, axis=1).values
+        else:
+            xn=V.values
+        pca = PCA(n_components=5)
+        pca.fit(xn) # run the pca
+        xpca=pca.transform(xn) # projecting xn onto the pca components
+        if colorby:
+            if np.size(colorby)>1:
+                colorby=colorby[0]
+            if not colorby in reps.columns:
+                print('variable '+colorby+'not in the available features.')
+                #return 0
+            else:
+                classvector=reps[colorby].values
+                varindex=find(reps.columns.values==colorby); 
+                d=ppf.colorDict(keys=np.unique(classvector), colors=color)
+                plt.sca(ax[0][0])
+                plt.scatter(xpca[:, components[0]], xpca[:, components[1]], c=[d[j] for j in classvector], lw=dotsize, alpha=alpha)
+                plt.sca(ax[1][0])
+                plt.scatter(xpca[:, components[0]], xpca[:, components[1]], lw=dotsize, alpha=alpha, color='grey')
+                #plt.sca(ax[1][1])
+                #plt.scatter(xpca[:, components[1]], xpca[:, components[2]], lw=dotsize)
+                ppf.createFigLegend(dic=d)  
+        else:
+            cl='red'
+            plt.scatter(xpca[:, components[0]], xpca[:, components[1]]) 
+        time.sleep(0.5)
+        plt.sca(ax[1][0])
+        plt.xlabel('Component '+str(components[0]))  
+        plt.ylabel('Component '+str(components[1]))
+        plt.title('PCA of '+dtype)
+        plt.sca(ax[1][1])
+        plt.xlabel('Component '+str(components[0]))  
+        plt.ylabel('Component '+str(components[2]))
+        plt.title('PCA of '+dtype)
+        if clicknumber >0:
+            g=0
+            pointvector=[]
+            while(g<clicknumber):
+                plt.figure(plt.gcf().number)
+                plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
+                plt.sca(ax[0][0]);
+                a=plt.ginput(1);
+                subst=[ scipy.spatial.distance.euclidean(np.array([xpca[j, 0], xpca[j, 1]]), a[0]) for j in range(0, np.size(xpca, 0))];
+                point=np.argmin(subst)
+                pointvector.append(point)
+                exptname=reps.iloc[point, 0]
+                plateloc=reps.iloc[point, 3]
+                print(reps.iloc[point, :]);
+                if colorby:
+                    cl=d[reps.iloc[point, formatnum(varindex)]];
+                #plt.sca(ax[0][0]);
+                #plt.scatter(xpca[point, 0], xpca[point, 1], marker='x', c='red', lw=3);
+                plt.sca(ax[1][0]);
+                plt.scatter(xpca[point, 0], xpca[point, 1], marker='x', c=cl, lw=3);
+                plt.sca(ax[0][1]); plt.plot(xn[point, :], color=cl);
+                #adding a schematic of in which experiment this is
+                ax[1][1].clear()
+                axplate=ax[1][1]
+                plt.sca(axplate);
+                #plt.scatter(xpca[point, 1], xpca[point, 2], marker='x', c=cl, lw=3);
+                plt.xlim([0, 12])
+                plt.ylim([0,8])
+                plt.title(exptname+' '+plateloc)  
+                axplate.set_yticks([.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]) 
+                xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
+                axplate.set_xticks(np.array(xticks)-.5) 
+                axplate.set_xticklabels(['%d' % (j) for j in xticks]  )
+                letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']
+                position=np.where([plateloc[0]== j for j in letters])[0][0]   
+                axplate.set_yticklabels(letters)   
+                [plt.axvline(x=j) for j in xticks]
+                [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
+                print(letters)
+                print('\nplateloc '+plateloc+' position '+str(position))
+                rct=matplotlib.patches.Rectangle(xy=(np.float(plateloc[1:])-1, position), width=1, height=1, color='red') 
+                axplate.add_patch(rct)  
+                fig.canvas.draw();
+                fig.canvas.flush_events();
+                g+=1
+            plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
+        return pca, reps.iloc[np.unique(pointvector),: ] 
 
     
