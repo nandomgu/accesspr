@@ -2405,6 +2405,6 @@ class accesspr:
                 fig.canvas.flush_events();
                 g+=1
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
-        return pca, reps.iloc[np.unique(pointvector),: ] 
+        return pca, reps.iloc[np.unique(pointvector),:  ]
 
     
