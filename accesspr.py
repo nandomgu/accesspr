@@ -526,10 +526,7 @@ class accesspr:
     to learn about pandas dataframes and the seaborn graphics package. 
     
     ***Newest FEATURES***
-    
-    self.assignFL() now receives a list of many potential main fluorescence channel names and you can provide a list of experiments.
-    self.getvariables() call this to update all variables available at least once i all your experiment colleciton.
-    self.makedataframe() can now extract information robustly across all experiments in scalar or 2 time formats. 
+    pcaclick- get a bird's eye view of all your dataset's curves by using PCA, then browse and select curves of interest.
     -----------------------------------------------------------------------------------------------------------
     ATTRIBUTES: 
     
@@ -775,10 +772,19 @@ class accesspr:
 
     '''
 
-    def __init__(self, source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True):
+    def __init__(self, source, encoding='latin1', ignoreFiles=False,analyseFL=True, onlyFiles=False, FL='noFL', FLperod='noFLperod',  preprocess=False):
         '''
         obj=acesspr( source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True)
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
+        source- the path or paths where the plate reader data is located. 
+        ignoreFiles= list of file names to ignore 
+        onlyFiles= list of experiments to exculsively add (i.e. ignore all experiments except for this list). 
+            Useful when a folder has too many irreevant experiments
+        FL= indicates the main fluorescence to be indexed in the experiments. defaults to noFL
+        FLperod= name of the variable that contains the fluorescence per od. only edit if your FL per od has a non standard name. 
+        analyseFL= if False, fluorescence routines are ignored.
+        preprocess- if working with FL experiments run in different plate readers and different gains, preprocess corrects for all these differences.
+            For details, see self.preprocessAll2().
         '''
         self.date=datetime.today().strftime('%Y-%m-%d')
         self.prtype='Tecan'
@@ -1046,10 +1052,15 @@ class accesspr:
                     if candidatecounter>=np.size(self.supportingFL): #if we went through all candidates and none of them were found, then supporting fluorescence becomes unassigned.  
                         self.FL[exp]['supportingFL']=['unassigned']
                     continue
-    def preprocessAll2(self, experiments=[], fillnans=True, normOD=0.8, extension='preprocessed.xlsx',  reload=True):
+    def preprocessAll2(self, experiments=[], fillnans=True, normOD=0.8, extension='preprocessed.xlsx'):
         '''
         preprocessExpt(expt, fillnans=True, standardize=True, mapFL=True, normOD=0.8, extension='preprocessed.xlsx' )
-        preprocess all experiments to fix problems in measurement and normalize data. this version directly replaces the data arrays experiment by experiment.
+        preprocess all experiments to fix problems in measurement and correct for plate reader differences. this version directly replaces the data arrays experiment by experiment.
+        fillnans.- fills overflow values (nans) in the main FL by scaling a supporting FL (lower gain) to the scale of the main FL.
+            e.g. GFP80 gives high signal to noise but some points overflow. therefore GFP60 is linearly transformed to replace GFP80
+        experiments.- list of experiments to preprocess.
+        extension- file with preprocessed data is created with the extension 'preprocessed.xslx' as default.    
+            *WARNING* preprocessed xlsx file is not reliable as of version 4.89. 
         '''
         #pdb.set_trace()
         main=self.consensusFL
@@ -2306,8 +2317,21 @@ class accesspr:
             return expt.d[m][s][stat]
         else:
             return np.nan
-    def pcaclick(self, reps=None, components=[0,1,2], dtype='OD', times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, clicknumber=0, dotsize=.6, alpha=0.5):
-        '''function to perform PCA on timevarying observations 
+    def pcaclick(self,  reps=None, , dtype='OD', clicknumber=0, components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5):
+        '''
+        pcaclick(self, reps=None, , dtype='OD', clicknumber=0,components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5)
+        
+        Explore all curves of dtype using Principal Components Analysis. Then click and select observations of interest.
+        reps= pandas dataframe with replicate information (defaults to self.allreplicates)
+        dtype= the type of curves to project. defaults to 'OD'
+        clicknumber=the number of clicks intended. assumes no clicks are intended so make sure to change to >0
+        components= components of interest in the PCA. recommended to leave as [0,1,2]
+        times.- the times at which to sample the curves of dtype. make sure this spans the length of all your curves
+        rownorm.- (boolean) whether to normalise each curve by centering its values to their mean and scaling them  by the standard deviation.
+        colorby.- *RECOMMENDED* variable in reps to group and colour the observations. e.g. if 'media', each media type will be coloured differently.
+        color.- the colours to use when using colorby.
+        dotsiz.- the size of the points in the scatterplot
+        alpha.- (0..1) the transparency of the points in the scatterplot. more curves call for a smaller number.
         '''
         if not isinstance(reps, pd.DataFrame):
             reps=self.allreplicates ##dataframe of conditions
