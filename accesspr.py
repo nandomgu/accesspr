@@ -2317,7 +2317,7 @@ class accesspr:
             return expt.d[m][s][stat]
         else:
             return np.nan
-    def pcaclick(self,  reps=None, , dtype='OD', clicknumber=0, components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5):
+    def pcaclick(self, reps=None, dtype='OD', clicknumber=0, components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5):
         '''
         pcaclick(self, reps=None, , dtype='OD', clicknumber=0,components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5)
         
@@ -2430,24 +2430,6 @@ class accesspr:
                 g+=1
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
         return pca, reps.iloc[np.unique(pointvector),:  ]
-
-
-plt.figure(); 
-plt.subplot(7,2,1);plotrawreplicates(self, strain='498.Hxt1', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,3); plotrawreplicates(self, strain='480.Hxt2', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,5); plotrawreplicates(self, strain='485.Hxt3', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,7); plotrawreplicates(self, strain='409.Hxt4', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,9); plotrawreplicates(self, strain='487.Hxt5', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,11); plotrawreplicates(self, strain='488.Hxt6', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,13);plotrawreplicates(self, strain='566.Hxt7', media='Glu 0.1%', dtype='OD', exptColors=sc,addLegend=False) 
-
-plt.subplot(7,2,2);plotrawreplicates(self, strain='498.Hxt1', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,4); plotrawreplicates(self, strain='480.Hxt2', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,6); plotrawreplicates(self, strain='485.Hxt3', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,8); plotrawreplicates(self, strain='409.Hxt4', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,10); plotrawreplicates(self, strain='487.Hxt5', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,12); plotrawreplicates(self, strain='488.Hxt6', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
-plt.subplot(7,2,14);plotrawreplicates(self, strain='566.Hxt7', media='Glu 0.1%', dtype='GFP80', exptColors=sc,addLegend=False) 
 
 
 
