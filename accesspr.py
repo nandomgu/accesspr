@@ -967,8 +967,13 @@ class accesspr:
                             #print('data and contents files: '+ formatstring(datafile)+formatstring(contentsfile))
                             if contentsfile and datafile:
                                 #creating pr file from scratch
-                                p=pr.platereader(datafile, contentsfile, info=False)
-                                exptname=re.split(r'[/\\]', p.name)[-1]
+                                try:
+                                    p=pr.platereader(datafile, contentsfile, info=False)
+                                    exptname=re.split(r'[/\\]', p.name)[-1]
+                                except XLRDError:
+                                    print('failed to import experiment: excel file appears to be corrupt.')
+                                    self.failedfiles.append([datafile, contentsfile])
+                                    continue
                                 if ppf.hasKey(self.data, exptname):
                                     continue
                                 else:
@@ -983,10 +988,6 @@ class accesspr:
                                             print('successfully preprocessed\n')
                                         except Exception as err:
                                             print('problem while preprocessing:'+str(err))
-#                                             except XLRDError:
-#                                                 print('failed to import experiment: excel file appears to be corrupt.')
-#                                                 self.failedfiles.append([datafile, contentsfile])
-#                                                 continue
 #                             except Exception as err:
 #                                 print('failed to import experiment: '+str(err))
 #                                 self.failedfiles.append([datafile, contentsfile, err])
