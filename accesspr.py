@@ -21,6 +21,7 @@ from sklearn.preprocessing import normalize, StandardScaler
 from sklearn.decomposition import PCA  
 import time
 import pdb
+from matplotlib.mlab import find
 #from decimal import *
 #getcontext().prec = 3
 
@@ -925,6 +926,7 @@ class accesspr:
         1. pickles created with the pickle library
         2. folders, each containing two excel datasheets: a) data file and b)contents file (characterised by ending in contents.xls or contents.xlsx
         '''
+        importerrors='The following files could not be imported:\n'
         print('accesspr version'+self.version)
         if isinstance(self.source, str):
             self.source=[self.source]
@@ -972,8 +974,13 @@ class accesspr:
                                     exptname=re.split(r'[/\\]', p.name)[-1]
                                 except XLRDError:
                                     print('failed to import experiment: excel file appears to be corrupt.')
+                                    importerrors=importerrors+'\n'+exptname+'\t file appears corrupt'
                                     self.failedfiles.append([datafile, contentsfile])
                                     continue
+                                except Exception as err:
+                                    print('problem while preprocessing:'+str(err))
+                                    importerrors=importerrors+'\n'+exptname+'\t seems like a wrong sheet'
+                                    self.failedfiles.append([datafile, contentsfile])
                                 if ppf.hasKey(self.data, exptname):
                                     continue
                                 else:
@@ -987,12 +994,10 @@ class accesspr:
                                             self.preprocessAll2(experiments=formatlist(exptname), fillnans=True, normOD=0.8, extension='preprocessed.xlsx',  reload=True)
                                             print('successfully preprocessed\n')
                                         except Exception as err:
-                                            print('problem while preprocessing:'+str(err))
-#                             except Exception as err:
-#                                 print('failed to import experiment: '+str(err))
+                                            print('failed to preprocess experiment: '+str(err))
+        print(importerrors)
 #                                 self.failedfiles.append([datafile, contentsfile, err])
 #                                 continue
-
             #pickle.dump(self.data, open('xpr_startingdata.pkl', 'wb'))
             #pickle.dump(self, open('xprBackup.pkl', 'wb'))
     def getexpt(self, num):
@@ -2339,7 +2344,7 @@ class accesspr:
         fig, ax=plt.subplots(2,2)
         V=self.makedataframe('timerow', dtype=dtype, times=times, conditionsDF=reps).T.fillna(method='ffill').fillna(0)#get the values of the data frame and transpose them to have the time series.
         ##we try to fill the nans by extending the last value in the column whenever possible
-        if sum(np.isnan(V.values))>0:
+        if np.isnan(V).any().any():
             print('removing columns that contain nans...\n')
             nancols=sum(np.isnan(V.values),0)
             print(V.columns.values[nancols>0]) ##these are the columns that have nans
@@ -2424,15 +2429,23 @@ class accesspr:
                 [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
                 print(letters)
                 print('\nplateloc '+plateloc+' position '+str(position))
-                rct=matplotlib.patches.Rectangle(xy=(np.float(plateloc[1:])-1, position), width=1, height=1, color='red') 
+                rct=pch.Rectangle(xy=(np.float(plateloc[1:])-1, position), width=1, height=1, color='red') 
                 axplate.add_patch(rct)  
                 fig.canvas.draw();
                 fig.canvas.flush_events();
                 g+=1
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
         return pca, reps.iloc[np.unique(pointvector),:  ]
-
-
-
+def excludereps(self, reps=[], byindex=False):
+    ''' excludereps(self, reps=[], byindex=False)
+        excludes replicates based on their index in the self.allreplicates dataframe
+        reps.- dataframe of replicates to exclude (in the format of self.allreplicates
+        byindex(internal use mainly).- exclude replicates assuming the indices of self.allreplicates and reps match. more efficient, but not always guaranteed to work fine due to python indexing.'''
+    if byindex:
+        self.allreplicates.iloc[[x for x in set(self.allreplicates.index.values)- set(reps.index.values)], :].reset_index(drop=True, inplace=True) 
+    else:
+        findrep= lambda a: find(np.array(df['experiment'].values==a[0]) & np.array(df['media'].values==a[1]) & np.array(df['strain'].values==a[2]) & np.array(df['plateloc'].values==a[3]  ) )[0]  
+        inds=[findrep(df.iloc[j, :].values) for j in df.index]  
+        self.allreplicates.iloc[[x for x in set(self.allreplicates.index.values)- set(inds)], :].reset_index(drop=True, inplace=True) 
 
     
