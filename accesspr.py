@@ -2436,16 +2436,16 @@ class accesspr:
                 g+=1
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
         return pca, reps.iloc[np.unique(pointvector),:  ]
-def excludereps(self, reps=[], byindex=False):
-    ''' excludereps(self, reps=[], byindex=False)
-        excludes replicates based on their index in the self.allreplicates dataframe
-        reps.- dataframe of replicates to exclude (in the format of self.allreplicates
-        byindex(internal use mainly).- exclude replicates assuming the indices of self.allreplicates and reps match. more efficient, but not always guaranteed to work fine due to python indexing.'''
-    if byindex:
-        self.allreplicates.iloc[[x for x in set(self.allreplicates.index.values)- set(reps.index.values)], :].reset_index(drop=True, inplace=True) 
-    else:
-        findrep= lambda a: find(np.array(df['experiment'].values==a[0]) & np.array(df['media'].values==a[1]) & np.array(df['strain'].values==a[2]) & np.array(df['plateloc'].values==a[3]  ) )[0]  
-        inds=[findrep(df.iloc[j, :].values) for j in df.index]  
-        self.allreplicates.iloc[[x for x in set(self.allreplicates.index.values)- set(inds)], :].reset_index(drop=True, inplace=True) 
-
+    def excludereps(self, reps=[], byindex=False):
+        ''' excludereps(self, reps=[], byindex=False)
+            excludes replicates based on their index in the self.allreplicates dataframe
+            reps.- dataframe of replicates to exclude (in the format of self.allreplicates
+            byindex(internal use mainly).- exclude replicates assuming the indices of self.allreplicates and reps match. more efficient, but not always guaranteed to work fine due to python indexing.'''
+        if byindex:
+            self.allreplicates=self.allreplicates[[x not in reps.index.values for x in self.allreplicates.index.values]]                                                                               
+        else:
+            findrep= lambda a: find(np.array(df['experiment'].values==a[0]) & np.array(df['media'].values==a[1]) & np.array(df['strain'].values==a[2]) & np.array(df['plateloc'].values==a[3]  ) )[0]  
+            inds=[findrep(self.allreplicates.iloc[j, :].values) for j in reps.index]  
+            self.allreplicates=self.allreplicates.iloc[[x not in inds for x in range(0, len(self.allreplicates))], :]
+            self.allreplicates=self.allreplicates.reset_index(drop=True) 
     
