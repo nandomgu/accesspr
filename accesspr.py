@@ -25,8 +25,7 @@ from matplotlib.mlab import find
 #from decimal import *
 #getcontext().prec = 3
 
-### RAW DATA FUNCTIONS. functions that receive a rawdata dictionary where rawdata[stat] is a matrix of m wells x n timepoints,
-###coming directly from the plate reader excel sheet.
+
 
 formatlist=lambda t: [t] if np.size(t)==1 else t
 formatstring=lambda t: t if np.size(t)==1 and len(t)>1 else t[0]
@@ -386,12 +385,16 @@ def extractTS(df, media, strain, tstype='FLperODTS'):
     out=df[a & b][tstype].values
     #out=df[a & b][tstype].values[0].split()
     return( out)
-def getRawData(expt):
+def getRawData(expt, sheet=[]):
     if isinstance(expt, str): #process the string if it is one, otherwise assemble it.
         xl=pd.ExcelFile(expt)
+        if not sheet:
+            df=xl.parse(0)
+        else:
+            df=xl.parse(sheet)
     else:
         xl= pd.ExcelFile(expt.wdir + expt.name+'.xlsx')
-    df= xl.parse(expt.dsheetnumber)
+        df= xl.parse(expt.dsheetnumber)
     dlabels= df[df.columns[0]].values ##get column names
     itime= np.nonzero(dlabels == 'Time [s]')[0] ##indices of the time vectors for each datatype, which are a good reference for upcoming data entries
     #itime + 0 is time. -1 is cycle number. +1 is temperature. +2 is the first well whose label is found at df.ix[itime[i]+2][0]
@@ -406,7 +409,10 @@ def getRawData(expt):
     timepoints=df.ix[itime[0]][1:].dropna().values.astype('float')/3600 #
     datastarts= itime+2
     dataends= itime -4
-    matrixrows= dataends[1]-datastarts[0]+1 ###the end of the first matrix is 4 indices above the next time vector
+    if np.size(datastarts)>1:
+        matrixrows= dataends[1]-datastarts[0]+1 ###the end of the first matrix is 4 indices above the next time vector
+    else:
+        matrixrows=[i for i, x in enumerate([pd.isnull(j)  for j in dlabels[datastarts[0]:]]) if x ][0] 
     rawdata={} 
     for i in itime:
         d= i+2
@@ -773,9 +779,9 @@ class accesspr:
 
     '''
 
-    def __init__(self, source, encoding='latin1', ignoreFiles=False,analyseFL=True, onlyFiles=False, FL='noFL', FLperod='noFLperod',  preprocess=False):
+    def __init__(self, source=[], params={}, encoding='latin1', ignoreFiles=False,analyseFL=True, onlyFiles=False, FL='noFL', FLperod='noFLperod',  preprocess=False, ignorepickles=False, ignorexls=False):
         '''
-        obj=acesspr( source, encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True)
+        obj=acesspr( source, params={}; encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True)
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
         source- the path or paths where the plate reader data is located. 
         ignoreFiles= list of file names to ignore 
@@ -787,6 +793,8 @@ class accesspr:
         preprocess- if working with FL experiments run in different plate readers and different gains, preprocess corrects for all these differences.
             For details, see self.preprocessAll2().
         '''
+        self.ignorexls=ignorexls
+        self.ignorepickles=ignorepickles
         self.date=datetime.today().strftime('%Y-%m-%d')
         self.prtype='Tecan'
         #source is a directory with several pickle files. if no pickles are found, then it tries to find experiments.
@@ -808,16 +816,6 @@ class accesspr:
         self.activeExpts=[];
         self.version='4.89'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
-        self.allconditions=pd.DataFrame()
-        if analyseFL==True: #if fl analysis is required, we first fill up the FL fields
-            self.analyseFL=True
-            self.FL={}
-            self.consensusFLs=[]
-            self.consensusFL=FL
-            self.consensusFLperod=FLperod
-            self.supportingFL=['GFP60', 'GFP70', 'GFP75']
-        self.loadInitial() #load experiments, potentially doing preprocessing if this is indicated during initialisation.
-        #once experiments have been loaded, we assign fluorescence to each of the individual experiments.
         self.defaultStats=['gr','GFP','c-GFPperod', 'GFP100','c-GFP100perod','GFP90','c-GFP90perod','GFP80','c-GFP80perod','GFP70', 'c-GFP70perod','GFP60', 'c-GFP60perod','GFP50', 'c-GFP50perod']
         self.extractionFieldsScalar=[]
         self.extractionFieldsTime=[]
@@ -827,43 +825,53 @@ class accesspr:
         self.extractionFieldsFL=['FLPeak','absolutePeakTime','alignedPeakTime','responseTime','responseTimeAligned','halfFL','normalizedFLPeak','slope','steepness']
         self.mediaValue={'Glu 0.05%': 0.05, 'Glu 0.1%': 0.1, 'Glu 0.2%': 0.2,'Glu 0.4%': 0.4,'Glu 0.6%': 0.6,'Glu 0.8%': 0.8,'Glu 1%': 1,'Glu 1.5%': 1.5,'Glu 2%': 2,'2% Glu': 2,'0.2% Glu': 0.2, 'SucGlu 1%': 0.5, 'SucGlu 1.8% 0.2%': 0.2/2, 'SucGlu 0.2% 1.8%': 1.8/2}
         self.strainAlias={'YST_498': 'Hxt1', 'YST_499': 'Hxt1', 'Hxt4': 'Hxt4', 'Hxt2': 'Hxt2','Hxt3': 'Hxt3','Hxt5': 'Hxt5','Hxt6': 'Hxt6','Hxt7n': 'Hxt7' }
-        self.listcontents(verbose=False) ## indexes experiments, runs getvariables(), checkallstats() and getallcontents
-        #self.getallcontents()
-        self.strainColors=False ##### list of colours to be assigned to each strain in plotting routines. currently not in use.
-        self.mediaColors=False ##### list of colours to be assigned to each media during plotting routines. currently not in use.
-        self.exptColors=False  ##### list of colours to be assigned to each media during plotting routines. currently not in use.
-        self.aligned=False
-        self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.statcontents=pd.DataFrame( index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
-        self.wildTypeList=['WT', '77.WT', '229.WT']
-        self.machines={}
-        self.serialnumbers={}
-        ##This stores the normalisation factor for each experiment.
-        self.normalizationFactor={}
-        #this provides the conditions to obtain the normaliation factor. the channel, and the od for which the normalizing factor is obtained
-        self.normStandard={}
-        self.normStandard['channel']='AutoFL'
-        self.normStandard['OD']=0.4 
-        #self.getNormFactor()
-        self.refstrains=dict()
-        self.getvariables(verbose=False)
-        self.replicateLocations()
-        self.checkallstats()
-        self.findMachines()
-        if analyseFL==True and not self.FL:
-            for key in self.data.keys():
-                self.FL[key]={}  
-            self.assignFL(mainFL=FL, mainFLperod=FLperod)
-            self.assignsupportingFL()
-        else:
-            self.analyseFL=False
-        try:
-            self.alignAll(rerun=True)
-        except Exception as err:
-            print('failed to align: '+str(err))
-        #self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
-        #this stores the absolute duration (in hrs) of the shortest experiment
-
+        self.allconditions=pd.DataFrame()
+        if analyseFL==True: #if fl analysis is required, we first fill up the FL fields
+            self.analyseFL=True
+            self.FL={}
+            self.consensusFLs=[]
+            self.consensusFL=FL
+            self.consensusFLperod=FLperod
+            self.supportingFL=['GFP60', 'GFP70', 'GFP75']
+        if source:
+            self.loadInitial() #load experiments, potentially doing preprocessing if this is indicated during initialisation.
+        if self.data:#once experiments have been loaded, we assign fluorescence to each of the individual experiments.
+            self.listcontents(verbose=False) ## indexes experiments, runs getvariables(), checkallstats() and getallcontents
+            #self.getallcontents()
+            self.strainColors=False ##### list of colours to be assigned to each strain in plotting routines. currently not in use.
+            self.mediaColors=False ##### list of colours to be assigned to each media during plotting routines. currently not in use.
+            self.exptColors=False  ##### list of colours to be assigned to each media during plotting routines. currently not in use.
+            self.aligned=False
+            self.processRecord=pd.DataFrame(columns=['experiment', 'correctauto', 'getstatsOD', 'getstatsFLperod'], index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
+            self.statcontents=pd.DataFrame( index= list(self.data.keys())) ### stamps are incomplete, error, 1 if processing is complete but date unknown  and date if processing date is known.
+            self.wildTypeList=['WT', '77.WT', '229.WT']
+            self.machines={}
+            self.serialnumbers={}
+            ##This stores the normalisation factor for each experiment.
+            self.normalizationFactor={}
+            #this provides the conditions to obtain the normaliation factor. the channel, and the od for which the normalizing factor is obtained
+            self.normStandard={}
+            self.normStandard['channel']='AutoFL'
+            self.normStandard['OD']=0.4 
+            #self.getNormFactor()
+            self.refstrains=dict()
+            self.getvariables(verbose=False)
+            self.replicateLocations()
+            self.checkallstats()
+            self.findMachines()
+            if analyseFL==True and not self.FL:
+                for key in self.data.keys():
+                    self.FL[key]={}  
+                self.assignFL(mainFL=FL, mainFLperod=FLperod)
+                self.assignsupportingFL()
+            else:
+                self.analyseFL=False
+            try:
+                self.alignAll(rerun=True)
+            except Exception as err:
+                print('failed to align: '+str(err))
+            #self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
+            #this stores the absolute duration (in hrs) of the shortest experiment
     def getvariables(self, verbose=True):
         '''
         getvariables(self, verbose=True)
@@ -934,8 +942,8 @@ class accesspr:
             if path.exists(src) and path.isdir(src):
                 dirs = os.listdir(src)
                 for entry in dirs:
-                    print('trying to import '+entry)
-                    if entry.endswith('.pkl') and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) :
+                    if entry.endswith('.pkl') and (self.ignoreFiles == False or ((entry in self.ignoreFiles)==False)) and (self.onlyFiles==False or entry in self.onlyFiles) and (not self.data or not (entry in list(self.data.keys())) ) and self.ignorepickles==False:
+                        print('trying to import pickle '+entry)
                         pkl = open(src + '/' + entry, 'rb')
                         p=pickle.load(pkl,encoding= self.encoding)
                         exptname=re.split(r'[/\\]', p.name)[-1]
@@ -962,7 +970,7 @@ class accesspr:
                                     if not f.endswith('preprocessed.xlsx'): #if no preprocessing required import file wo preprocessing
                                         datafile=src+'/'+entry+'/'+f
                                             #print('datafile:'+datafile+'\n')
-                        if hasExcel>=2:
+                        if hasExcel>=2 and not self.ignorexls:
                             print('directory with excel files will be incorporated.')
                             #the folder may contain more than one experiments and the name of the experiment may differ from
                             #that of the folder. therefore we use the experiment filename as a unifying reference
@@ -1572,7 +1580,7 @@ class accesspr:
         plt.xlabel('OD of null')
         plt.ylabel('FL of null')
         createFigLegend(dic=exptColors)
-    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', savestate=False, bd=False, cvfn='sqexp', esterrs=False, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5, figs=False):
+    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', savestate=False, bd=False, cvfn='matern', esterrs=False, noruns=5, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5, figs=False):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
         statistical analysis have run odstats().
@@ -1600,7 +1608,7 @@ class accesspr:
                 continue
             else:
                 try:
-                    self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, figs=figs)
+                    self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, noruns=noruns, exitearly=exitearly, linalgmax=linalgmax, figs=figs)
                     if savestate==True:
                         picklefilename='./xprdata/'+self.date+'/'+'getstats/'+key+'.pkl'
                         pickle.dump(self.data[key], open(picklefilename, 'rb'))
@@ -1938,7 +1946,7 @@ class accesspr:
         for j in range(0, np.size(self.allconditions,0)):
             if self.allconditions.values[j,1]=='null':
                 continue
-            df=pd.concat([df, self.timeStat(media=self.allreplicates.values[j,0],strain=self.allreplicates.values[j,1], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
+            df=pd.concat([df, self.timeStat(media=self.allreplicates.values[j,1],strain=self.allreplicates.values[j,2], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
             #except:
             #    print('condition ', self.allconditions.values[j,1], ' in ' ,self.allconditions.values[j,0], 'showed extraction problems.')
         df.index= range(0,np.size(df,0))
@@ -2353,7 +2361,7 @@ class accesspr:
             reps=reps.iloc[find(nancols==0), :]
         ##we fill the trailing NAs with the last value inserted using the last value of the series. then make all remaining nans a 0 in case some curves are completely nan.
         if rownorm==True:
-            normrow= lambda row: (row-mean(row))/std(row)
+            normrow= lambda row: (row-np.nanmean(row))/np.nanstd(row)
             xn=V.apply(normrow, axis=1).values
         else:
             xn=V.values
@@ -2389,9 +2397,9 @@ class accesspr:
         plt.xlabel('Component '+str(components[0]))  
         plt.ylabel('Component '+str(components[2]))
         plt.title('PCA of '+dtype)
+        pointvector=[]
         if clicknumber >0:
             g=0
-            pointvector=[]
             while(g<clicknumber):
                 plt.figure(plt.gcf().number)
                 plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
@@ -2447,5 +2455,51 @@ class accesspr:
             findrep= lambda a: find(np.array(df['experiment'].values==a[0]) & np.array(df['media'].values==a[1]) & np.array(df['strain'].values==a[2]) & np.array(df['plateloc'].values==a[3]  ) )[0]  
             inds=[findrep(self.allreplicates.iloc[j, :].values) for j in reps.index]  
             self.allreplicates=self.allreplicates.iloc[[x not in inds for x in range(0, len(self.allreplicates))], :]
-            self.allreplicates=self.allreplicates.reset_index(drop=True) 
-    
+            self.allreplicates=self.allreplicates.reset_index(drop=True)
+    def openfailed(self, number):
+        '''try to create a plate reader experiment in the failedfiles dictionary'''
+        p=pr.platereader(self.failedfiles[number][0], self.failedfiles[number][1])
+        return p 
+    def reloadrobust(self, picklefile, only=[], exclude=[]):
+        '''load experiments one by one from an xpr.data pickle into an existing xpr data object'''
+        dat=pickle.load(open(picklefile, 'rb'))
+        for j in list(dat.keys()):
+            if not only or j in only or not(j in exclude):
+                self.data[j]= dat[j]
+        self.getallcontents()
+        self.checkallstats()
+    def getresiduals(self, dtype='OD'):
+        for j in self.allreplicates:
+            ex,m,s,pl= df.iloc[j][0],df.iloc[j][1],df.iloc[j][2],df.iloc[j][3]
+            self.data[ex].d[m][s][dtype+'residual']=self.data[ex].d[m][s][dtype]-self.data[ex].d[m][s][f+dtype]
+            self.data[ex].d[m][s]['sqdif-'+dtype]=np.sum(self.data[ex].d[m][s][dtype+'residual']**2)
+            self.data[ex].d[m][s]['normsqdif-'+dtype]=np.sum(self.data[ex].d[m][s][dtype+'residual']**2)/np.len(self.data[ex].d[m][s][dtype+'residual'])
+    def overview(self, exptnum, experiment=[], dtype= 'OD', colormap='cool', colorMapRange=False, timeRange=False, addFL=False):
+        if experiment:
+            p=self.data[experiment]
+            st=experiment
+        else:
+            p=self.getexpt(exptnum)
+            st=self.allexperiments[exptnum]
+        axarray=ppf.experimentOverview(p,  dtype= dtype, colormap=colormap, colorMapRange=colorMapRange, timeRange=timeRange, addFL=addFL)
+        plt.suptitle(st)
+        return axarray
+# params.consensusFL=
+# params.supportingFL=
+# params.FL=
+# params.correctauto.do=False
+# params.correctauto.f=['GFP']
+# params.correctauto.correctmedia=False
+# params.correctauto.figs=True
+# params.correctauto.which='all'
+# params.getstats[0].do=False
+# params.getstats[0].which='all'
+# params.getstats[0].cvfn='nn'
+# params.getstats[0].dtype='OD'
+# params.getstats[0].noruns=10
+# params.getstats[0].bd={}
+# params.getstats[0].rerun='all'
+# params.preprocess=False
+
+
+

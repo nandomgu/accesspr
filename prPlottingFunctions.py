@@ -1284,14 +1284,12 @@ def experimentOverview(p, dtype= 'OD', colormap='cool', colorMapRange=False, tim
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_xaxis().set_visible(False)
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_yaxis().set_visible(False)
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].set_label(p.d[media][strain]['plateloc'][cc])
-                axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].legend()
                 continue
             try:
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].scatter(p.t, p.d[media][strain][dtype][:,cc], c=p.d[media][strain][dtype][:,cc], cmap=colormap, vmin=colorMapRange[0], vmax=colorMapRange[1], edgecolor='None')
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_xaxis().set_visible(False)
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].get_yaxis().set_visible(False)
                 axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].set_label(p.d[media][strain]['plateloc'][cc])
-                axarr[conditionCoordinates[cc][0], conditionCoordinates[cc][1]].legend()
             except IndexError:
                 #print('time length: ', np.size(p.t))
                 #print('vector length: ', np.size(p.d[media][strain][dtype],0))
