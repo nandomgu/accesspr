@@ -1212,6 +1212,8 @@ class accesspr:
         '''
         if experiments== False:
             experiments=list(self.data.keys())
+        for j in experiments:
+            self.FL[j]={}
         GFPFields=['GFP' in key for key in self.statcontents.keys()]
         ###Getting fields that contain GFP and are present in all experiments		
         self.consensusFLs=self.statcontents.keys()[GFPFields][np.where([np.around(sum(self.statcontents[field]))== np.size(self.statcontents,0) for field in  self.statcontents.keys()[GFPFields]])]
@@ -1444,7 +1446,6 @@ class accesspr:
         '''
         sd=list(self.allmedia)
         return [sd[c] for c in np.where([strng in j for j in  self.allmedia])[0]]
-    
     def getallcontents(self):
         '''
         getallcontents(self)
@@ -1580,7 +1581,7 @@ class accesspr:
         plt.xlabel('OD of null')
         plt.ylabel('FL of null')
         createFigLegend(dic=exptColors)
-    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', savestate=False, bd=False, cvfn='matern', esterrs=False, noruns=5, stats=True, plotodgr=False, rerun=False, exitearly= False, linalgmax= 5, figs=False):
+    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', savestate=False, bd=False, cvfn='matern', esterrs=False, noruns=5, stats=True, plotodgr=False, rerun=False, linalgmax= 5, figs=False):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
         statistical analysis have run odstats().
@@ -1608,7 +1609,7 @@ class accesspr:
                 continue
             else:
                 try:
-                    self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, noruns=noruns, exitearly=exitearly, linalgmax=linalgmax, figs=figs)
+                    self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, noruns=noruns, linalgmax=linalgmax, figs=figs)
                     if savestate==True:
                         picklefilename='./xprdata/'+self.date+'/'+'getstats/'+key+'.pkl'
                         pickle.dump(self.data[key], open(picklefilename, 'rb'))
@@ -2435,15 +2436,18 @@ class accesspr:
                 axplate.set_yticklabels(letters)   
                 [plt.axvline(x=j) for j in xticks]
                 [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
-                print(letters)
-                print('\nplateloc '+plateloc+' position '+str(position))
+                #print(letters)
+                #print('\nplateloc '+plateloc+' position '+str(position))
                 rct=pch.Rectangle(xy=(np.float(plateloc[1:])-1, position), width=1, height=1, color='red') 
                 axplate.add_patch(rct)  
                 fig.canvas.draw();
                 fig.canvas.flush_events();
                 g+=1
+                factor= numpy.full((len(reps), 1), False, dtype=bool)
+                factor[np.unique(pointvector)]=True
+                reps['clicked']=factor
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
-        return pca, reps.iloc[np.unique(pointvector),:  ]
+        return reps, reps.iloc[np.unique(pointvector),:  ], pca
     def excludereps(self, reps=[], byindex=False):
         ''' excludereps(self, reps=[], byindex=False)
             excludes replicates based on their index in the self.allreplicates dataframe
@@ -2463,9 +2467,12 @@ class accesspr:
     def reloadrobust(self, picklefile, only=[], exclude=[]):
         '''load experiments one by one from an xpr.data pickle into an existing xpr data object'''
         dat=pickle.load(open(picklefile, 'rb'))
+        #self.allexperiments= np.unique(self.allexperiments)
         for j in list(dat.keys()):
             if not only or j in only or not(j in exclude):
                 self.data[j]= dat[j]
+        self.listcontents()
+        self.getvariables()
         self.getallcontents()
         self.checkallstats()
     def getresiduals(self, dtype='OD'):
@@ -2502,4 +2509,30 @@ class accesspr:
 # params.preprocess=False
 
 
+def drawplatelayout():
+    axplate=plt.axes()
+    plt.xlim([0, 12])
+    plt.ylim([0,8])
+    #plt.title(exptname+' '+plateloc)  
+    axplate.set_yticks([.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]) 
+    xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
+    axplate.set_xticks(np.array(xticks)-.5) 
+    axplate.set_xticklabels(['%d' % (j) for j in xticks]  )
+    letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
+    axplate.set_yticklabels(letters)   
+    [plt.axvline(x=j) for j in xticks]
+    [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
+
+def selectwell(axplate=plt.gca(), fig=plt.gcf()):
+    coords=plt.ginput()
+    x=int(np.floor(coords[0][0]))
+    y=int(np.floor(coords[0][1]))
+    rct=pch.Rectangle(xy=(x, y), width=1, height=1, color='red', alpha=.3)
+    xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
+    letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
+    axplate.add_patch(rct)
+    plateloc=letters[y]+str(xticks[x])  
+    fig.canvas.draw();
+    fig.canvas.flush_events();
+    return plateloc
 

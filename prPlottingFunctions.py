@@ -1147,10 +1147,11 @@ def replicateList(p, excludeNull=False):
         for strain in p.d[media].keys():
             plateloc=p.d[media][strain]['plateloc']
             for j in plateloc:
-                finalmedia.append(media)
-                finalstrains.append(strain)
-                finalexpts.append(exptname)
-                finalplateloc.append(j)
+                if not(plateloc in p.ignoredwells):
+                    finalmedia.append(media)
+                    finalstrains.append(strain)
+                    finalexpts.append(exptname)
+                    finalplateloc.append(j)
             cl=pd.DataFrame(list(zip(finalexpts,finalmedia, finalstrains, finalplateloc)), columns= ['experiment', 'media', 'strain', 'plateloc'])
     if excludeNull==True:
         cl=cl[cl['strain']!='null']
