@@ -2118,8 +2118,8 @@ class accesspr:
                 startPoints.append(np.around(self.data[expt].d[media][strain][centeringVariable][0],2))
             except Exception as err:
                 print('problem measuring length of data trace. '+str(err)+'\n'+centeringVariable+' may not exist for '+expt+' '+media+' '+strain+'\n excluding expriment '+expt)
+                removelist.append(expt)
                 continue
-        removelist.append(expt)
         removelist=np.unique(removelist)
         #for j in removelist:
         #    replicateMatrix=replicateMatrix[replicateMatrix['experiment']!=j]
@@ -2444,7 +2444,7 @@ class accesspr:
                 fig.canvas.draw();
                 fig.canvas.flush_events();
                 g+=1
-                factor= numpy.full((len(reps), 1), False, dtype=bool)
+                factor= np.full((len(reps), 1), False, dtype=bool)
                 factor[np.unique(pointvector)]=True
                 reps['clicked']=factor
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
@@ -2508,30 +2508,29 @@ class accesspr:
 # params.getstats[0].bd={}
 # params.getstats[0].rerun='all'
 # params.preprocess=False
-def drawplatelayout():
-    axplate=plt.axes()
-    plt.xlim([0, 12])
-    plt.ylim([0,8])
-    #plt.title(exptname+' '+plateloc)  
-    axplate.set_yticks([.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]) 
-    xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
-    axplate.set_xticks(np.array(xticks)-.5) 
-    axplate.set_xticklabels(['%d' % (j) for j in xticks]  )
-    letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
-    axplate.set_yticklabels(letters)   
-    [plt.axvline(x=j) for j in xticks]
-    [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
-
-def selectwell(axplate=plt.gca(), fig=plt.gcf()):
-    coords=plt.ginput()
-    x=int(np.floor(coords[0][0]))
-    y=int(np.floor(coords[0][1]))
-    rct=pch.Rectangle(xy=(x, y), width=1, height=1, color='red', alpha=.3)
-    xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
-    letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
-    axplate.add_patch(rct)
-    plateloc=letters[y]+str(xticks[x])  
-    fig.canvas.draw();
-    fig.canvas.flush_events();
-    return plateloc
+    def drawplatelayout():
+        #axplate=plt.axes()
+        plt.xlim([0, 12])
+        plt.ylim([0,8])
+        #plt.title(exptname+' '+plateloc)  
+        axplate.set_yticks([.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]) 
+        xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
+        axplate.set_xticks(np.array(xticks)-.5) 
+        axplate.set_xticklabels(['%d' % (j) for j in xticks]  )
+        letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
+        axplate.set_yticklabels(letters)   
+        [plt.axvline(x=j) for j in xticks]
+        [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
+    def selectwell(axplate=plt.gca(), fig=plt.gcf()):
+        coords=plt.ginput()
+        x=int(np.floor(coords[0][0]))
+        y=int(np.floor(coords[0][1]))
+        rct=pch.Rectangle(xy=(x, y), width=1, height=1, color='red', alpha=.3)
+        xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
+        letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
+        axplate.add_patch(rct)
+        plateloc=letters[y]+str(xticks[x])  
+        fig.canvas.draw();
+        fig.canvas.flush_events();
+        return plateloc
 
