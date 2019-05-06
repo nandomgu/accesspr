@@ -1944,10 +1944,10 @@ class accesspr:
                 mx= np.max(maxdf['FinalOD'])
         else:
             mx=False
-        for j in range(0, np.size(self.allconditions,0)):
-            if self.allconditions.values[j,1]=='null':
+        for j in range(0, np.size(self.allreplicates,0)):
+            if self.allreplicates.values[j,2]=='null':
                 continue
-            df=pd.concat([df, self.timeStat(media=self.allreplicates.values[j,1],strain=self.allreplicates.values[j,2], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
+            df=pd.concat([df, self.timeStat(experiment=self.allreplicates.values[j,0],  media=self.allreplicates.values[j,1],strain=self.allreplicates.values[j,2], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
             #except:
             #    print('condition ', self.allconditions.values[j,1], ' in ' ,self.allconditions.values[j,0], 'showed extraction problems.')
         df.index= range(0,np.size(df,0))
@@ -1957,7 +1957,7 @@ class accesspr:
             df=DFsubset(df, 'strain', strains)
         return df
         
-    def timeStat(self, media, strain, times= [4], dtype='OD', includedescriptors=True, scale=False, max=False, subtractBackground=False, background=False, xstat='time' ):
+    def timeStat(self,  media, strain, experiment=[], times= [4], dtype='OD', includedescriptors=True, scale=False, max=False, subtractBackground=False, background=False, xstat='time' ):
         '''
         df=timeStat(self, media, strain, times=[4], dtype='FLperod', includeMediaStrain=True):
         Generates a dataframe where columns are media, strain and the values of dtype at times (one column per element in times).
@@ -1965,9 +1965,10 @@ class accesspr:
         The times are absolute from the beginning of each experiment. Default is at 4 hrs.
         '''
         self.containssetup(media,strain, strict=False) #finding the experiments with a given media and strain
-        expts=self.containslist ##here are the compliant experiments.
-        formatlist=lambda t: [t] if np.size(t)==1 else t
-        formatval=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, int) else np.array(t)
+        if not experiment:
+            expts=self.containslist ##here are the compliant experiments.
+        else:
+            expts= formatlist(experiment)
         cols= ['experiment','machine','media', 'strain']+ formatlist(times)
         isWithinBound= np.array([j<=self.interpLimit for j in formatval(times)]) ###true or false array saying 
         #print(type(isWithinBound))
@@ -2507,8 +2508,6 @@ class accesspr:
 # params.getstats[0].bd={}
 # params.getstats[0].rerun='all'
 # params.preprocess=False
-
-
 def drawplatelayout():
     axplate=plt.axes()
     plt.xlim([0, 12])
