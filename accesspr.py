@@ -21,7 +21,7 @@ from sklearn.preprocessing import normalize, StandardScaler
 from sklearn.decomposition import PCA  
 import time
 import pdb
-from matplotlib.mlab import find
+#from matplotlib.mlab import find
 from matplotlib.widgets import RectangleSelector
 from platform import system, release 
 #from decimal import *
@@ -30,7 +30,7 @@ from platform import system, release
 #useful small functions   
 #find the column number that corresponds to a specific column name
 findloc=lambda loc, platelocs: np.nonzero([j==loc for j in platelocs])[0][0]      
-grepcolumns= lambda name, df: find([not not re.findall( f , name )for f in df.columns.values])     
+grepcolumns= lambda name, df: np.nonzero([not not re.findall( f , name )[0][0] for f in df.columns.values])     
 formatlist=lambda t: [t] if np.size(t)==1 else t
 formatstring=lambda t: t if np.size(t)==1 and len(t)>1 else t[0]
 formatval=lambda t: t[0] if isinstance(t, list) and np.size(t)==1 and isinstance(t, int) else np.array(t)
@@ -2348,7 +2348,7 @@ class accesspr:
             print(V.columns.values[nancols>0]) ##these are the columns that have nans
             print('\n')
             V=V[V.columns[nancols==0]].values
-            reps=reps.iloc[find(nancols==0), :]
+            reps=reps.iloc[np.nonzero(nancols==0)[0][0], :]
         ##we fill the trailing NAs with the last value inserted using the last value of the series. then make all remaining nans a 0 in case some curves are completely nan.
         if rownorm==True:
             normrow= lambda row: (row-np.nanmean(row))/np.nanstd(row)
@@ -2366,7 +2366,7 @@ class accesspr:
                 #return 0
             else:
                 classvector=reps[colorby].values
-                varindex=find(reps.columns.values==colorby); 
+                varindex=np.nonzero(reps.columns.values==colorby)[0][0]; 
                 d=ppf.colorDict(keys=np.unique(classvector), colors=color)
                 plt.sca(ax[0][0])
                 plt.scatter(xpca[:, components[0]], xpca[:, components[1]], c=[d[j] for j in classvector], lw=dotsize, alpha=alpha)
@@ -2451,7 +2451,7 @@ class accesspr:
         if byindex:
             self.allreplicates=self.allreplicates[[x not in reps.index.values for x in self.allreplicates.index.values]]                                                                               
         else:
-            findrep= lambda a: find(np.array(df['experiment'].values==a[0]) & np.array(df['media'].values==a[1]) & np.array(df['strain'].values==a[2]) & np.array(df['plateloc'].values==a[3]  ) )[0]  
+            findrep= lambda a: np.nonzero(np.array(df['experiment'].values==a[0])[0][0] & np.array(df['media'].values==a[1]) & np.array(df['strain'].values==a[2]) & np.array(df['plateloc'].values==a[3]  ) )[0]  
             inds=[findrep(self.allreplicates.iloc[j, :].values) for j in reps.index]  
             self.allreplicates=self.allreplicates.iloc[[x not in inds for x in range(0, len(self.allreplicates))], :]
             self.allreplicates=self.allreplicates.reset_index(drop=True)
@@ -2507,18 +2507,18 @@ class accesspr:
         #         if not os.path.isdir(self.savedir+'/'+self.date+'/staged'):    
         #             self.stagepath=self.savedir+'/'+self.date+'/staged'
         #             os.mkdir(self.savedir+'/'+self.date+'/staged')
-    def stagedata(self, label=[], experiments=False):
+    def stagedata(self, label='', experiments=False):
         try:
             self.stagecount+=1
-            newstagepath='/accessprstage_'+str(self.stagecount)+'_'+label+'_'+datetime.now().strftime('%Y-%m-%d-%H%Mhrs')
+            newstagepath=self.savedir+'/'+self.date+'/accessprstage_'+str(self.stagecount)+'_'+label+'_'+datetime.now().strftime('%Y-%m-%d-%H%Mhrs')
             print('Creating path for the new stage...\n')
             if not os.path.isdir(newstagepath):
                 os.mkdir(newstagepath)  
-                pickle.dump(self, newstagepath+'/accessprobject_'+label+'_'+self.stagecount+'.pkl')  
-                pickle.dump(self.data, newstagepath+'/datastage_'+self.stagecount+label+datetime.now().strftime('%Y-%m-%d-%H%Mhrs')+'.pkl')
+                pickle.dump(self, open(newstagepath+'/accessprobject_'+label+'_'+self.stagecount+'.pkl', 'wb'))  
+                pickle.dump(self.data, open(newstagepath+'/datastage_'+str(self.stagecount)+label+datetime.now().strftime('%Y-%m-%d-%H%Mhrs')+'.pkl', 'wb'))
                 if experiments:
                     for j in self.allexperiments:
-                        pickle.dump(self.data[j], newstagepath+'/experiments/'+j+'.pkl')
+                        pickle.dump(self.data[j], open(newstagepath+'/experiments/'+j+'.pkl', 'wb'))
             self.currentstagepath=newstagepath
         except Exception as err:
             print('data could not be staged: '+err)
