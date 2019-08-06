@@ -22,20 +22,23 @@ from sklearn.decomposition import PCA
 import time
 import pdb
 from matplotlib.mlab import find
+from matplotlib.widgets import RectangleSelector
+from platform import system, release 
 #from decimal import *
 #getcontext().prec = 3
 
-
-
+#useful small functions   
+#find the column number that corresponds to a specific column name
+findloc=lambda loc, platelocs: np.nonzero([j==loc for j in platelocs])[0][0]      
+grepcolumns= lambda name, df: find([not not re.findall( f , name )for f in df.columns.values])     
 formatlist=lambda t: [t] if np.size(t)==1 else t
 formatstring=lambda t: t if np.size(t)==1 and len(t)>1 else t[0]
-formatval=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, int) else np.array(t)
+formatval=lambda t: t[0] if isinstance(t, list) and np.size(t)==1 and isinstance(t, int) else np.array(t)
 formatnum=lambda t: t[0] if np.size(t)==1 and type(t)==np.ndarray  else t 
 formatfloat=lambda t: np.array([t]) if np.size(t)==1 and isinstance(t, float) else np.array(t)
 treatmulti=lambda x: x[0] if np.size(x)>1 else x
 fixempty=lambda x: np.nan if not x else x
 removenulls= lambda x: x[x['strain']!='null']   #function for hassle free removal of nulls
-  
 def rotatelabels(ax, angle=90):
     [item.set_rotation(angle) for item in ax.get_xticklabels()]   
 def internalStd(rawdata, stat, wtindices, fr=0.4, to=0.7, len=30):
@@ -545,8 +548,8 @@ class accesspr:
         a dictionary of platereader objects, corresponding to each experiment in each pickle file. 
         The keys are each experiment's pickle file name. e.g. xpr.data[picklefilename].d[media][strain]
     allreplicates:
-        a pandas dataframe of the experiment, media, strain and plate localisation of each replicate in the experiment ensemble.
-    allContents:
+        a pandas dataframe of the experiment, media, strain and plate location of each replicate in the experiment ensemble.
+    allcontents:
         a pandas dataframe containing all unique combinations of strains and media found in all experiments. 
     statcontents:
         a pandas dataframe describing what statistics are in which experiment, and the fraction (0-1) of conditions 
@@ -660,8 +663,6 @@ class accesspr:
                         #then we check whether the dataframe's strain number was reduced.
                         np.size(np.unique(df2['strain']))
                         #Out[1366]: 3
-
-
     Data processing and extraction of all accesspr information
         
         extractallinfonew(self, excludeNull=False)
@@ -712,7 +713,6 @@ class accesspr:
                     2   Glu 2%      Hxt4    1  10058.7
                 will allow sns.factorplot and sns.swarmplot  to plot the time vs FLperod relationship
                 appropriately. 
-
             
         colorScatter(self, media, strain, experiments=False, xstat=False, ystat='FLperod', colorBy='d/dtgr', symmetric=True, cmap='bwr',nbins=40, extendBy=2, alpha=1, markersize=12, marker='o', addLegend=False)
             creates a scatter plot of array xstat (defaults to time) vs array ystat, where the color of each point is determined by the magnitude array colorBy
@@ -726,7 +726,7 @@ class accesspr:
                 extendBy- adds extra bins not contemplated by colorBy. useful to distinguish outliers.
             addLegend- adds a colormap scale reference. must be set to False until the last scatter plot has been added to the figure.
                 
-        plotReplicateMean(self, media, strain, dtype='FLperod', col='Black', alpha=0.2, exceptionShift=0.01):
+        plotrepmean(self, media, strain, dtype='FLperod', col='Black', alpha=0.2, exceptionShift=0.01):
             for a given strain and condition, runs interpTimes and plots the mean ± standard deviation (shaded area) over time for the combined replicates. 
             It operates on the current figure, so multiple plots can be overlayed.
             
@@ -793,9 +793,14 @@ class accesspr:
         preprocess- if working with FL experiments run in different plate readers and different gains, preprocess corrects for all these differences.
             For details, see self.preprocessAll2().
         '''
+        self.version='4.94'
         self.ignorexls=ignorexls
         self.ignorepickles=ignorepickles
         self.date=datetime.today().strftime('%Y-%m-%d')
+        self.savedir='./accessprdata'
+        self.objectpath=[]
+        self.stagepath=[]
+        self.stagecount=[]
         self.prtype='Tecan'
         #source is a directory with several pickle files. if no pickles are found, then it tries to find experiments.
         self.source = source
@@ -814,7 +819,6 @@ class accesspr:
         #activeExperiments is an array the list of currently relevant pickle files meant to be loaded onto memory.
         #this list is modified by contains functions
         self.activeExpts=[];
-        self.version='4.89'
         self.releaseNotes='xpr.FL contains default fluorescence per experiment'
         self.defaultStats=['gr','GFP','c-GFPperod', 'GFP100','c-GFP100perod','GFP90','c-GFP90perod','GFP80','c-GFP80perod','GFP70', 'c-GFP70perod','GFP60', 'c-GFP60perod','GFP50', 'c-GFP50perod']
         self.extractionFieldsScalar=[]
@@ -946,7 +950,8 @@ class accesspr:
                         print('trying to import pickle '+entry)
                         pkl = open(src + '/' + entry, 'rb')
                         p=pickle.load(pkl,encoding= self.encoding)
-                        exptname=re.split(r'[/\\]', p.name)[-1]
+                        exptname=re.split(r'[/\\\\]', p.name)[-1]
+                        #print('processed name of'+ p.name+':- '+exptname+'\n')
                         self.data[exptname] = p
                         self.activeExpts.append(exptname)
                         pkl.close()
@@ -979,7 +984,7 @@ class accesspr:
                                 #creating pr file from scratch
                                 try:
                                     p=pr.platereader(datafile, contentsfile, info=False)
-                                    exptname=re.split(r'[/\\]', p.name)[-1]
+                                    exptname=re.split(r'[/\\\\]', p.name)[-1]
                                 except XLRDError:
                                     print('failed to import experiment: excel file appears to be corrupt.')
                                     importerrors=importerrors+'\n'+exptname+'\t file appears corrupt'
@@ -1117,11 +1122,6 @@ class accesspr:
         print([experiments[j] for j in np.where(preprocessed)[0]])
         #this version of the function does not load fresh.
         #self.loadFresh(exptList= [self.allexperiments[j] for j in np.where(preprocessed)[0]], extension='preprocessed.xlsx') 
-    def stageData():
-        ##future: add way to verify that data changes have been made
-        pickle.dump(self.data, open('xpr_datastage'+str(self.currentStage+1).zfill(2)+'.pkl', 'wb'))
-        self.currentStage=self.currentStage+1
-        #used to save the data processing at different stages so that processing can be reversed at any point
     def loadPickles(self, exptList=[]):
         '''
         loadExpts(exptList=self.activeExpts)
@@ -1462,6 +1462,8 @@ class accesspr:
             rl= pd.concat([rl, ppf.replicateList(self.data[key])], ignore_index=True)
         self.allreplicates=rl
         self.allcontents=cl
+        self.allreplicates['experiment']= [re.split(r'[/\\\\]', exptname)[-1]  for exptname in self.allreplicates['experiment']]
+        self.allcontents['experiment']=[re.split(r'[/\\\\]', exptname)[-1]   for exptname in self.allcontents['experiment']]
         self.allconditions= pd.DataFrame(np.column_stack([cl.values[:,1], cl.values[:,2]]), columns=['media', 'strain'])
         self.allconditions=self.allconditions.drop_duplicates()
     def correctauto(self, f=[], experiments='all',media='all', strains='all', refstrain=['WT', '229.WT', '77.WT', 'REF'], figs=False, correctOD=True, noruns=2, bd=False, no1samples=100, rewrite=False, rerun=False, correctmedia=True, mediausemean=False, ignoreneg=True):
@@ -1581,7 +1583,7 @@ class accesspr:
         plt.xlabel('OD of null')
         plt.ylabel('FL of null')
         createFigLegend(dic=exptColors)
-    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', savestate=False, bd=False, cvfn='matern', esterrs=False, noruns=5, stats=True, plotodgr=False, rerun=False, linalgmax= 5, figs=False):
+    def getstats(self, experiments='all', conditionsDF=False, media='all', strain='all', dtype='OD', savestate=False, bd=False, cvfn='matern', esterrs=False, noruns=5, stats=True, plotodgr=False, rerun=False, figs=False, iskip=False):
         '''
         This method ensures that all experiments that are used for plotting and subsequent 
         statistical analysis have run odstats().
@@ -1609,7 +1611,7 @@ class accesspr:
                 continue
             else:
                 try:
-                    self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, noruns=noruns, linalgmax=linalgmax, figs=figs)
+                    self.data[key].getstats(dtype=dtype, esterrs=esterrs, bd=bd, cvfn=cvfn, stats=stats, plotodgr=plotodgr, noruns=noruns, figs=figs, iskip=iskip)
                     if savestate==True:
                         picklefilename='./xprdata/'+self.date+'/'+'getstats/'+key+'.pkl'
                         pickle.dump(self.data[key], open(picklefilename, 'rb'))
@@ -1728,16 +1730,18 @@ class accesspr:
             self.containsstat('Time centered at FL peak',printstats=False)
             if 'Time centered at gr peak' in list(self.statcontents.columns.values):
                 grAlignedFraction=self.statcontents['Time centered at gr peak'].sum()/ np.size(self.statcontents['Time centered at gr peak'])
+                print( str(self.statcontents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statcontents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statcontents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
             else:
                 grAlignedFraction=0
-            if grAlignedFraction==1:
+            if grAlignedFraction>.95:
                 self.aligned=True
                 print('Experiments aligned successfully.')
             else:
                 self.aligned=False
-                print( str(self.statcontents['Time centered at gr peak'].sum())+" out of "+str(np.size(self.statcontents['Time centered at gr peak']))+"experiments aligned. \n Tips: \n .getstats() calculates growth statistics from all experiments. \n.statcontents lets you see which experiments need to get have gr or FLperod. \n.alignAll(rerun=True) to try aligning again")
+        else:
             print('Experiments have already been aligned. to realign, try rerun=True')
             self.getvariables()
+            self.checkallstats()
     def plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=5, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
         '''
@@ -1927,7 +1931,6 @@ class accesspr:
         if xlim:
             plt.xlim(xlim)
         return exptColors
-
     def timeStatAll(self, times, media='all', strains='all', xstat='time', dtype='OD', scale=False, subtractBackground=False):
         df=pd.DataFrame()
         if scale != False:
@@ -1945,9 +1948,12 @@ class accesspr:
         else:
             mx=False
         for j in range(0, np.size(self.allreplicates,0)):
+            e,m,s,pl=self.allreplicates.values[j,0],self.allreplicates.values[j,1],self.allreplicates.values[j,2],self.allreplicates.values[j,3]
+            #print('e '+e+' '+'m '+m+' s '+s+'\n')
             if self.allreplicates.values[j,2]=='null':
                 continue
-            df=pd.concat([df, self.timeStat(experiment=self.allreplicates.values[j,0],  media=self.allreplicates.values[j,1],strain=self.allreplicates.values[j,2], times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
+            else:
+                df=pd.concat([df, self.timeStat(experiment=e,  media=m,strain=s, plateloc=pl, times=times, dtype=dtype, scale=scale, xstat=xstat, max=mx)])
             #except:
             #    print('condition ', self.allconditions.values[j,1], ' in ' ,self.allconditions.values[j,0], 'showed extraction problems.')
         df.index= range(0,np.size(df,0))
@@ -1956,8 +1962,7 @@ class accesspr:
         if strains !='all':#if strain subset is entered then filter dataframe by that subset
             df=DFsubset(df, 'strain', strains)
         return df
-        
-    def timeStat(self,  media, strain, experiment=[], times= [4], dtype='OD', includedescriptors=True, scale=False, max=False, subtractBackground=False, background=False, xstat='time' ):
+    def timeStat(self,  media, strain, experiment=[], plateloc=[], times= [4], dtype='OD', includedescriptors=True, scale=False, max=False, subtractBackground=False, background=False, xstat='time' ):
         '''
         df=timeStat(self, media, strain, times=[4], dtype='FLperod', includeMediaStrain=True):
         Generates a dataframe where columns are media, strain and the values of dtype at times (one column per element in times).
@@ -1969,45 +1974,60 @@ class accesspr:
             expts=self.containslist ##here are the compliant experiments.
         else:
             expts= formatlist(experiment)
-        cols= ['experiment','machine','media', 'strain']+ formatlist(times)
+        cols= ['experiment','media', 'strain', 'plateloc']+ formatlist(times)
         isWithinBound= np.array([j<=self.interpLimit for j in formatval(times)]) ###true or false array saying 
         #print(type(isWithinBound))
         #whether the times fall within the length of the shortest experiment
         if np.size(np.where(isWithinBound==False))>0: #warn that times out of the bound will be excluded.
             print('Warning: times above ', self.interpLimit, ' are being excluded')
         ###we immediately get rid of the times outside the duration of the shortest experiment.
-        times=formatval(times)
-        [isWithinBound]
+        times=formatnum(times)
         if includedescriptors==True: ##whether the user wants to iinclude the media and strain columns
             fin=pd.DataFrame( columns=cols) #preparing the output dataframe with media and strain
         else:
             fin=pd.DataFrame( columns= times) #preparing the output dataframe w/o media and strain
         for j in range(0, np.size(expts)): ##loop through experiment names
             #print(expts[j])
-            try:
-                if np.ndim( self.data[expts[j]].d[media][strain][dtype])>1:
+            #try:
+            if not ppf.hasKey(self.data[expts[j]].d[media][strain], dtype):
+                datavals= np.zeros([np.size(self.data[expts[j]].t, 0), 1])*np.nan
+                continue
+            if np.ndim( self.data[expts[j]].d[media][strain][dtype])>1:
+                #print('enter1. multiple columns')
+                if not plateloc or isinstance(plateloc, list): #if plateloc is a list then average all locs
+                    #print('enter2 there is no plateloc or plateloc is a string')
                     datavals= self.data[expts[j]].d[media][strain][dtype].mean(1)
                 else:
-                    datavals=self.data[expts[j]].d[media][strain][dtype]
-                if subtractBackground==True: ##if the user wants to subtract a minimum value of the signal
-                    if background == False: ##if no general minimum is given we use the minimum level of the signal
-                        background= np.min(datavals)
-                else:#if subtraction of the minimum is not needed we make background 0.
-                    background=0
-                datavals=datavals-background #whatever the value of background is at this point, we subtract it from the signal datavals.
-                if scale==True: ##if the user wants to scale the response relative to a maximum
-                    if max != False: ##if no general maximum is given we use the maximum level in the signal
-                        f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/max, bounds_error=False, fill_value=np.nan) #create interpolation function
-                    else:#if a max is given we divide the signal by it.
-                        f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/np.max(datavals) , bounds_error=False, fill_value=np.nan) #create interpolation function
-                else: #if scaling is not required then we just proceed with the original time series.
-                    f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals, bounds_error=False, fill_value=np.nan) #create interpolation function
-                fin.loc[j,times]= [j for j in f(times)] #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
-            except:
-                print('Something went wrong with extraction of '+expts[j] )		
+                    if isinstance(plateloc, str): #if it is a string then it is only one well. 
+                        #print('enter3 there is plateloc string')
+                        plateloclist=self.data[expts[j]].d[media][strain]['plateloc']
+                        if plateloc in plateloclist: #if that well is in the list (has not been removed)
+                            #print('enter4 plateloc is in the plateloc list. datavals assigned')
+                            datavals=  self.data[expts[j]].d[media][strain][dtype][:, findloc(plateloc, plateloclist)]
+                        else:
+                            if not plateloc in plateloclist or plateloc in self.data[expts[j]].ignoredwells or self.ignoredwells[data[expts[j]]]:
+                                #print('enter5 well seems ignored. filling nans')
+                                datavals= np.zeros([np.size(self.data[expts[j]].t, 0), 1])*np.nan
+            else:
+                #print('enter6 one column. datavals assigned')
+                datavals=self.data[expts[j]].d[media][strain][dtype]
+            if subtractBackground==True: ##if the user wants to subtract a minimum value of the signal
+                if background == False: ##if no general minimum is given we use the minimum level of the signal
+                    background= np.min(datavals)
+            else:#if subtraction of the minimum is not needed we make background 0.
+                background=0
+            datavals=datavals-background #whatever the value of background is at this point, we subtract it from the signal datavals.
+            if scale==True: ##if the user wants to scale the response relative to a maximum
+                if max != False: ##if no general maximum is given we use the maximum level in the signal
+                    f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/max, bounds_error=False, fill_value=np.nan) #create interpolation function
+                else:#if a max is given we divide the signal by it.
+                    f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals/np.max(datavals) , bounds_error=False, fill_value=np.nan) #create interpolation function
+            else: #if scaling is not required then we just proceed with the original time series.
+                f = scint.interp1d(self.data[expts[j]].d[media][strain][xstat],  datavals, bounds_error=False, fill_value=np.nan) #create interpolation function
+            fin.loc[j,times]= [j for j in f(times)] #the dataframe at the given expt's index and  and at the times columns requested will be obtained by interpolating from the data
             if includedescriptors==True: # add media and strain if required
                 fin.loc[j,'experiment']= expts[j]
-                fin.loc[j,'machine']=self.machines[self.containslist[j]]
+                fin.loc[j,'plateloc']=plateloc
                 fin.loc[j,'media']= media
                 fin.loc[j,'strain']= strain
         fin[times]=fin[times].astype('float')
@@ -2025,30 +2045,6 @@ class accesspr:
             self.numReplicates['numReplicates']=daf.sum(1).values
             self.numReplicates['strain']=self.allconditions['strain']
             self.numReplicates['media']=self.allconditions['media']
-            
-        
-    def text2d(self, media=False, strains=False, dimx='FinalOD', dimy='maxGR', strainColors=False, xlim=False, ylim=False, markersize=500, newFig=True):
-        if newFig==True:
-            plt.figure()
-        patches=[]
-        legs=[]
-        plt.xlabel(dimx); plt.ylabel(dimy)
-        if strains==False:
-            strains=np.unique(list(self.allconditions['strain'].values))
-        if strainColors==False:
-            strainColors= dict(zip( self.allconditions['strain'].values, ppf.randomColors(np.size(self.allconditions['strain'].values))))
-        print(strainColors)
-        for strain in  strains:
-            print('current strain is'+strain) 
-            patches.append(pch.Patch(color= strainColors[strain]))
-            legs.append(strain)
-            if np.all(media==False):
-                media=self.allconditions[self.allconditions['strain']==strain]['media'].values
-            for m in media:
-                 df=self.extractRepInfo(m, strain) 
-                 plt.scatter(df[dimx], df[dimy], marker=r"${}$".format(m, markersize,markersize), s= markersize, color= strainColors[strain])
-        plt.figlegend(patches, legs, 'upper right')
-        return strainColors
     def makedataframe(self, type='notime', times=False, dtype='OD', xstat='time', conditionsDF=False):
         ''' makedataframe(self, type='notime', times=False, dtype='OD', xstat='time')
         Exports a dataframe with data in 3 different formats:
@@ -2214,21 +2210,13 @@ class accesspr:
         #self.data[shortestExperiment].t[-1] 
         #first we take the real time point indices that do not exceed the upper limit, which is in hours. say, if indices 161-200 are above, then you consider 1-160
         #then we interpolate the timepoints
-    def mergedicts(dictlist):
-        final={}
-        for dic in dictlist:
-            for key in dic.keys():
-                final[key]=dic[key]
-        return final
-
     def extractallinfonew(self, replicateDF=[], growthstats=[], flstats=[]):
         self.getvariables() #making sure all the latest added variables are available.
         if not isinstance(replicateDF, pd.DataFrame):
             replicateDF= self.allcontents
         df=pd.DataFrame(index= replicateDF.index, columns=self.extractionFields)
-        for j in range(0, np.size(replicateDF,0)):
-            expt, media, strain, plateloc= replicateDF.values[j]
-            ##Pending: generate modular extraction functions depending on expt, media, strain, plateloc
+        #for j in range(0, np.size(replicateDF,0)):
+        #    expt, media, strain, plateloc=  formatstring(replicateDF.values[j][grepcolumns('experiment', df)]),formatstring(replicateDF.values[j][grepcolumns('media', df)]),formatstring(replicateDF.values[j][grepcolumns( 'strain', df)]),formatstring(replicateDF.values[j][grepcolumns('plateloc', df)])             ##Pending: generate modular extraction functions depending on expt, media, strain, plateloc
         filler=[np.nan for j in range(0, len(replicateDF))]
         if not growthstats:
             growthstats=self.extractionFieldsScalar
@@ -2333,7 +2321,7 @@ class accesspr:
             return expt.d[m][s][stat]
         else:
             return np.nan
-    def pcaclick(self, reps=None, dtype='OD', clicknumber=0, components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5):
+    def pcaclick(self, reps=None, dtype='OD', clicknumber=0, components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5, label='pcaclick_0'):
         '''
         pcaclick(self, reps=None, , dtype='OD', clicknumber=0,components=[0,1,2], times=[0,1,2,3,4,5,6,7,8,9,10], rownorm=True, colorby=[], color=colors.nicePastels+colors.strongColors, dotsize=.6, alpha=0.5)
         
@@ -2400,6 +2388,11 @@ class accesspr:
         plt.ylabel('Component '+str(components[2]))
         plt.title('PCA of '+dtype)
         pointvector=[]
+        incrementlabel= lambda label, j: label if not label in reps.columns else label.split('_')[0]+'_'+str(j)
+        for j in range(1, 100):
+            newlabel= incrementlabel(label,j)
+            if not newlabel in reps.columns:
+                break
         if clicknumber >0:
             g=0
             while(g<clicknumber):
@@ -2446,8 +2439,9 @@ class accesspr:
                 g+=1
                 factor= np.full((len(reps), 1), False, dtype=bool)
                 factor[np.unique(pointvector)]=True
-                reps['clicked']=factor
+                reps[newlabel]=factor
             plt.suptitle('Click on the scatterplots to explore curves.\n '+str(g)+'/'+str(clicknumber)+' clicks')
+        print('clicked curves marked at self.allreplicates['+newlabel+']\n')
         return reps, reps.iloc[np.unique(pointvector),:  ], pca
     def excludereps(self, reps=[], byindex=False):
         ''' excludereps(self, reps=[], byindex=False)
@@ -2492,45 +2486,383 @@ class accesspr:
         axarray=ppf.experimentOverview(p,  dtype= dtype, colormap=colormap, colorMapRange=colorMapRange, timeRange=timeRange, addFL=addFL)
         plt.suptitle(st)
         return axarray
-# params.consensusFL=
-# params.supportingFL=
-# params.FL=
-# params.correctauto.do=False
-# params.correctauto.f=['GFP']
-# params.correctauto.correctmedia=False
-# params.correctauto.figs=True
-# params.correctauto.which='all'
-# params.getstats[0].do=False
-# params.getstats[0].which='all'
-# params.getstats[0].cvfn='nn'
-# params.getstats[0].dtype='OD'
-# params.getstats[0].noruns=10
-# params.getstats[0].bd={}
-# params.getstats[0].rerun='all'
-# params.preprocess=False
-    def drawplatelayout():
-        #axplate=plt.axes()
-        plt.xlim([0, 12])
-        plt.ylim([0,8])
-        #plt.title(exptname+' '+plateloc)  
-        axplate.set_yticks([.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]) 
-        xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
-        axplate.set_xticks(np.array(xticks)-.5) 
-        axplate.set_xticklabels(['%d' % (j) for j in xticks]  )
-        letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
-        axplate.set_yticklabels(letters)   
-        [plt.axvline(x=j) for j in xticks]
-        [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
-    def selectwell(axplate=plt.gca(), fig=plt.gcf()):
-        coords=plt.ginput()
-        x=int(np.floor(coords[0][0]))
-        y=int(np.floor(coords[0][1]))
-        rct=pch.Rectangle(xy=(x, y), width=1, height=1, color='red', alpha=.3)
+    def ignorewells(self, experiments=[]):
+        if not experiments:
+            experiments=self.allexperiments
+        if not not self.ignoredwells:
+            for expt in list(self.ignoredwells.keys()):
+                self.data[expt].ignorewells(self.ignoredwells[expt])
+    def createdirs(self):
+        if not os.path.isdir(self.savedir):
+            os.mkdir(self.savedir)
+        datefolder=self.savedir+'/'+self.date
+        if not os.path.isdir(datefolder):
+            os.mkdir(datefolder)
+        #         if not os.path.isdir(self.savedir+'/'+self.date+'/pickles'):    
+        #             self.picklepath=self.savedir+'/'+self.date+'/pickles'
+        #             os.mkdir(self.savedir+'/'+self.date+'/pickles')
+        #         if not os.path.isdir(self.savedir+'/'+self.date+'/objectdata'):    
+        #             self.objectpath=self.savedir+'/'+self.date+'/objectdata'
+        #             os.mkdir(self.savedir+'/'+self.date+'/objectdata')
+        #         if not os.path.isdir(self.savedir+'/'+self.date+'/staged'):    
+        #             self.stagepath=self.savedir+'/'+self.date+'/staged'
+        #             os.mkdir(self.savedir+'/'+self.date+'/staged')
+    def stagedata(self, label=[], experiments=False):
+        try:
+            self.stagecount+=1
+            newstagepath='/accessprstage_'+str(self.stagecount)+'_'+label+'_'+datetime.now().strftime('%Y-%m-%d-%H%Mhrs')
+            print('Creating path for the new stage...\n')
+            if not os.path.isdir(newstagepath):
+                os.mkdir(newstagepath)  
+                pickle.dump(self, newstagepath+'/accessprobject_'+label+'_'+self.stagecount+'.pkl')  
+                pickle.dump(self.data, newstagepath+'/datastage_'+self.stagecount+label+datetime.now().strftime('%Y-%m-%d-%H%Mhrs')+'.pkl')
+                if experiments:
+                    for j in self.allexperiments:
+                        pickle.dump(self.data[j], newstagepath+'/experiments/'+j+'.pkl')
+            self.currentstagepath=newstagepath
+        except Exception as err:
+            print('data could not be staged: '+err)
+            self.stagecount-=1
+    def changestage(self, number=[], label=[]):
+        if not number and not label:
+            return('Please specify either stage number or stage label')
+        else:
+            files= os.listdir(stagepath)
+            if number:
+                self.reloadRobust(files[find(['datastage_'+str(number) in j for j in files])[0]])
+    def relativetimepoints(self, df=[], dtype='OD', xstat='time',reftime=[], max=[], maxbefore=[], maxafter=[], nsteps=11):
+        '''For each condition in the dataset, extract data at each side of reference timepoint reftime, which may be different for every replicate in the experiment. 
+        Example:
+            Extract OD over time within a window of 5 hours to each side of the fluorescence peak time, exactly 11 timepoints
+                relativetimepoints(self, dtype='OD', reftime='FLAbsolutePeakTime', max=5, nsteps=11)
+            Extract OD over time 3 hours before and 2 hours before max growth rate
+                relativetimepoints(self, dtype='OD', reftime='time of max gr', maxbefore=3, maxafter=2, nsteps=11)
+        '''
+        if nsteps%2==0:
+            raise Warning('Warning: nsteps must be odd in order to retrieve values at query point')
+        intervalsize=1
+        if not isinstance(df, pd.DataFrame):
+            df=self.makedataframe()##retrieving only the hxt4 lines, let's ignore that we have different strains.
+        #hxt4df=DFsubset(hxt4df, 'media', )
+        mag=intervalsize#magnitude of interval
+        nbacksteps=np.floor(nsteps/2)-1
+        nfrontsteps=np.ceil(nsteps/2)
+        if not max and not maxbefore and not maxafter:
+            print('please indicate span length for both sides (max), span before the reftime (maxbefore) or span after the reftime (maxafter)') 
+        if max:
+            maxbefore=np.floor(max)
+            maxafter=np.ceil(max)
+        else:
+            if maxbefore and not maxafter:
+                maxafter=maxbefore
+            else:
+                if maxafter and not maxbefore:
+                    maxbefore=maxafter
+                else:
+                    if maxbefore and maxafter:
+                        nbacksteps= np.floor(nsteps* (maxbefore/(maxbefore+maxafter)))-1  
+                        nfrontsteps= np.ceil(nsteps* (maxbafter/(maxbefore+maxafter))) 
+        steps= np.linspace(-maxbefore*mag, maxafter*mag, nsteps ) #points surrounding the peak time
+        #stepsbefore=np.linspace(((-max)*mag), -1*mag, nbacksteps) #points before the peak time. negative training set
+        #stepsafter=np.linspace( 0,(max)*mag, nfrontsteps)
+        intervals=[np.around(steps+j,2) for j in df[reftime]]
+        #nintervalsb=[np.around(stepsbefore+j,2) for j in df[variable]]
+        #nintervalsa=[np.around(stepsafter+j,2) for j in df[variable]]
+        timevalues=np.unique(intervals) #we find all the unique times obtained from this expansion
+        #timevaluesb=np.unique(nintervalsb)
+        #timevaluesa=np.unique(nintervalsa)
+        #the timevalues array has to be within the interpLimit to work
+        #to simplify the process for now we extract  datapoints
+        timedf=self.makedataframe(conditionsDF= df, type='timerow', dtype=dtype, times=list(timevalues)) #list(timevalues[0:85])); 
+        #timedfb=self.makedataframe(conditionsDF= df, type='timerow', dtype='OD', times=list(timevaluesb)) #list(timevalues[0:85])); 
+        #timedfa=self.makedataframe(conditionsDF= df, type='timerow', dtype='OD', times=list(timevaluesa)) #list(timevalues[0:85])); 
+        dmOD=np.zeros([np.size(intervals,0), np.size(intervals[0])])  #initialising the design matrix for our training.
+        #dmODb=np.zeros([np.size(intervals,0), np.size(nintervalsb[0])])  #initialising the design matrix for our training.
+        #dmODa=np.zeros([np.size(intervals,0), np.size(nintervalsa[0])])  #initialising the design matrix for our training.
+        for j,k in enumerate(df.index):
+            #a,b,c, d=hxt4df.iloc[k, (0, 1,2,3)]
+            #try:
+            e,m,s,pl= df.iloc[k, 0],df.iloc[k, 1],df.iloc[k, 2],df.iloc[k, 3]
+        
+            try:
+                vec=timedf.transpose().iloc[k, ([np.where(timedf.transpose().columns==j)[0][0] for j in intervals[k]])].values
+            except Exception as err:
+                print(' '.join([e, m, s, pl])+' error:'+ str(err) )
+                vec=[np.nan for j in intervals[k]]
+            #vecb=timedfb.transpose().iloc[k, ([np.where(timedfb.transpose().columns==j)[0][0] for j in nintervalsb[k]])].values
+            #veca=timedfa.transpose().iloc[k, ([np.where(timedfa.transpose().columns==j)[0][0] for j in nintervalsa[k]])].values
+            #except:
+                #vec=np.nan* np.size(intervals[0])
+                #vecb=np.nan* np.size(intervals[0])
+                #veca=np.nan* np.size(intervals[0])
+                #vec0=np.nan* np.size(intervals[0])
+            dmOD[k, :]=  vec
+            #dmODb[k, :]=  vecb
+            #dmODa[k, :]=  veca
+        beforeindices=[j for j in range(0, int(nbacksteps+1))]  
+        afterindices=[j for j in range(int(nbacksteps+1), int(nbacksteps+1+nfrontsteps))]
+        return dmOD,steps, beforeindices, afterindices
+def drawplatelayout():
+    axplate=plt.axes()
+    plt.xlim([0, 12])
+    plt.ylim([0,8])
+    #plt.title(exptname+' '+plateloc)  
+    axplate.set_yticks([.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]) 
+    xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
+    axplate.set_xticks(np.array(xticks)-.5) 
+    axplate.set_xticklabels(['%d' % (j) for j in xticks]  )
+    letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
+    axplate.set_yticklabels(letters)   
+    [plt.axvline(x=j) for j in xticks]
+    [plt.axhline(y=j) for j in np.linspace(0, 8, 9)]
+    return axplate
+def selectwells(n=1, axplate=False, fig=False, color='red'):
+    if not axplate:
+        axplate=plt.gca()
+    if not fig:
+        fig= plt.gcf()
+    plateloc=[];
+    coords=plt.ginput(n, mouse_stop=3, mouse_pop=2, mouse_add=1)
+    for j in range(0, len(coords)):
+        x=int(np.floor(coords[j][0]))
+        y=int(np.floor(coords[j][1]))
+        rct=pch.Rectangle(xy=(x, y), width=1, height=1, color=color, alpha=.3)
         xticks=[1,2,3,4,5,6,7,8,9,10,11,12]
         letters=['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']  
         axplate.add_patch(rct)
-        plateloc=letters[y]+str(xticks[x])  
-        fig.canvas.draw();
-        fig.canvas.flush_events();
-        return plateloc
+        plateloc.append(letters[y]+str(xticks[x]))  
+    fig.canvas.draw();
+    fig.canvas.flush_events();
+    return plateloc
+def clickwells(self, expts=[], dtype= 'OD', colormap='cool', colorMapRange=False, size=4, timeRange=False, addFL=False, label='clicked', color='red'):
+    if not expts:
+        expts=self.allexperiments
+    self.ignoredwells={};
+    self.allreplicates[label]=False
+    for j in expts:
+        clickfig=plt.figure()
+        ax=showplate(self.data[j], dtype= 'OD', colormap='cool', colorMapRange=False, size=size, timeRange=False, addFL=False) 
+        plt.suptitle(j+'\nleftclick: ignore well \n rclick/enter: next expt. delete: unclick last well')
+        wells=selectwells(n=96, axplate=ax, color=color)
+        self.ignoredwells[j]=wells;
+        self.allreplicates[label]=np.logical_or(self.allreplicates[label], np.logical_and( self.allreplicates['experiment']==j, [x in wells for x in self.allreplicates['plateloc']]))      
+def showplate(p, dtype= 'OD', colormap='cool', colorMapRange=False, size=4, timeRange=False, addFL=False):
+    ax=plt.axes()
+    defaultRange={'OD': [0,1.5], 'GFP':[0,8000], 'AutoFL': [0,1000], 'mCherry': [0, 5000],'GFP80':[0,8000], 'GFP60':[0,8000], 'GFP100':[0,8000]}
+    if addFL!= False:
+        defaultRange.update(addFL)
+    if colorMapRange==False:
+        colorMapRange= defaultRange[dtype]
+    xstat=p.t
+    drawplatelayout()
+    ylim= [0,  1]
+    xlim=[0, 1];
+    xdata= (xstat-xlim[0])/ np.max(xstat-xlim[0])
+    cl=ppf.conditionList(p)[['media', 'strain']]
+    problematicWells=[]
+    for x in range(0, np.size(cl,0)):
+        media=cl.values[x,0]
+        strain=cl.values[x,1]
+        conditionCoordinates=[ppf.plateCoordinates(a) for a in p.d[media][strain]['plateloc']]
+        xpositions=np.array(conditionCoordinates)[:,1] #A1, 0 0, is in fact located at 11, 0 visually
+        ypositions=7-np.array(conditionCoordinates)[:, 0]          
+        #print('plateloc: ', p.d[media][strain]['plateloc'])
+        #print('conditionCoordinates: ', conditionCoordinates)
+        for cc in range(0,np.size(conditionCoordinates,0)):
+            ccdata= p.d[media][strain][dtype][:,cc]
+            ccdata= (ccdata-np.min(ccdata))/np.max(ccdata-np.min(ccdata)) #scaling the data of this well btn 0 and 1
+            plt.ylim([ylim[0], ylim[1]*8])
+            plt.xlim([xlim[0], xlim[1]*12])
+            if p.d[media][strain]['plateloc'][cc] in p.ignoredwells:
+                continue
+            else:
+                try:
+                    plt.scatter(xdata+xpositions[cc], ccdata+ypositions[cc], c=p.d[media][strain][dtype][:,cc], s= size, cmap=colormap, vmin=colorMapRange[0], vmax=colorMapRange[1], edgecolor='None')
+                except IndexError:
+                    #print('time length: ', np.size(p.t))
+                    #print('vector length: ', np.size(p.d[media][strain][dtype],0))
+                    print('Index error:  well ', p.d[media][strain]['plateloc'][cc], ', media ', media, ', strain ', strain)
+    plt.colorbar()
+    return ax
 
+def line_select_callback(eclick, erelease):
+    'eclick and erelease are the press and release events'
+    x1, y1 = eclick.xdata, eclick.ydata
+    x2, y2 = erelease.xdata, erelease.ydata
+    print("(%3.2f, %3.2f) --> (%3.2f, %3.2f)" % (x1, y1, x2, y2))
+    print(" The buttons you used were: %s %s" % (eclick.button, erelease.button))
+
+
+def toggle_selector(event):
+    print(' Key pressed.')
+    if event.key in ['Q', 'q'] and toggle_selector.RS.active:
+        print(' RectangleSelector deactivated.')
+        toggle_selector.RS.set_active(False)
+    if event.key in ['A', 'a'] and not toggle_selector.RS.active:
+        print(' RectangleSelector activated.')
+        toggle_selector.RS.set_active(True)
+
+
+def selectarea(current_ax):
+    # drawtype is 'box' or 'line' or 'none'
+    toggle_selector.RS = RectangleSelector(current_ax, line_select_callback,
+                                           drawtype='box', useblit=True,
+                                           button=[1, 3],  # don't use middle button
+                                           minspanx=5, minspany=5,
+                                           spancoords='pixels',
+                                           interactive=True)
+    plt.connect('key_press_event', toggle_selector)
+    plt.show()
+
+def selectpoint(ax=False, fig=False):
+    if not ax:
+        ax=plt.gca()
+    if not fig:
+        fig=plt.gcf()
+    x, y= plt.ginput()
+    return x,y
+
+def clickpoints(self, conditionsDF=False, dtype='OD', x='time', xlab='xpoint', ylab='ypoint'):
+    if not conditionsDF:
+        conditionsDF=self.allreplicates
+    xvec=[]
+    yvec=[]
+    print(conditionsDF)
+    for j in range(0, len(conditionsDF)):
+        expt, media, strain,plateloc= conditionsDF.values[j, [0,1,2,3]]
+        plt.figure()
+        plt.suptitle(str(np.round(j/len(conditionsDF)))+expt)
+        plt.title(media+strain+plateloc)
+        plt.plot(self.data[expt].d[media][strain][x], self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])])
+        xy=plt.ginput(timeout=60)
+        xvec.append(xy[0][0])
+        yvec.append(xy[0][1])
+        plt.close(plt.gcf())
+    conditionsDF[xlab]=xvec
+    conditionsDF[ylab]=yvec
+    def storeproperties(self):
+        propertylist=self.__dict__.keys() 
+        finaldict={}
+        for j in propertylist:
+            finaldict[j]= self.__dict__[j]
+        return finaldict
+def mergedicts(dictlist):
+    final={}
+    for dic in dictlist:
+        for key in dic.keys():
+            final[key]=dic[key]
+    return final
+
+# mag=1#magnitude of interval
+# max=5
+# nsteps=21 #number of values in the interval. must be odd to pass by zero
+# steps= np.linspace(-max*mag, max*mag, nsteps ) #points surrounding the peak time
+# stepsbefore=np.linspace((2*(-max)*mag)-1, -1*mag, nsteps ) #points before the peak time. negative training set
+# stepsafter=np.linspace( 1*mag,2*(max)*mag+1, nsteps )
+# stepstart=np.linspace( 0*mag,2*(max)*mag, nsteps ) #points at the beginning of some time series.
+# intervals=[np.around(steps+j,2) for j in hxt4df['absolutePeakTime']]
+# nintervalsb=[np.around(stepsbefore+j,2) for j in hxt4df['absolutePeakTime']]
+# nintervalsa=[np.around(stepsafter+j,2) for j in hxt4df['absolutePeakTime']]
+# nintervals0=[np.around(stepstart,2) for j in hxt4df['absolutePeakTime']]
+# timevalues=np.unique(intervals) #we find all the unique times obtained from this expansion
+# timevaluesb=np.unique(nintervalsb)
+# timevaluesa=np.unique(nintervalsa)
+# timevalues0=np.unique(nintervals0)
+# #the timevalues array has to be within the interpLimit to work
+# timedf=xpr.makedataframe(conditionsDF= hxt4df, type='timerow', dtype='OD', times=list(timevalues)) #list(timevalues[0:85])); 
+# timedfb=xpr.makedataframe(conditionsDF= hxt4df, type='timerow', dtype='OD', times=list(timevaluesb)) #list(timevalues[0:85])); 
+# timedfa=xpr.makedataframe(conditionsDF= hxt4df, type='timerow', dtype='OD', times=list(timevaluesa)) #list(timevalues[0:85])); 
+# timedf0=xpr.makedataframe(conditionsDF= hxt4df, type='timerow', dtype='OD', times=list(timevalues0)) #list(timevalues[0:85])); 
+
+
+# expdic={}
+# attributelist=[
+# p.version
+# p.dsheetnumber
+# p.asheetnumber
+# p.wdir
+# p.name
+# p.aname
+# p.standardgain
+# p.ignoredwells
+# p.ignored
+# p.negativevalues
+# p.serialnumber
+# p.machine
+# p.expdate
+# p.datatypes
+# p.gains
+# p.mediaGP
+# p.platelabels
+# p.allstrains
+# p.allconditions
+# p.alldata
+# p.importtime
+# p.gc
+# 
+# 
+# #migrating a p structure into a dictionary
+# expdic={}
+# for expt in self.allexperiments:
+#     p=self.data[expt]
+#     cl=ppf.conditionList(p)
+#     expdic[expt]={}
+#     expdic[expt]['version']=p.version
+#     expdic[expt]['dsheetnumber']=p.dsheetnumber
+#     expdic[expt]['asheetnumber']=p.asheetnumber
+#     expdic[expt]['wdir']=p.wdir
+#     expdic[expt]['name']=p.name
+#     expdic[expt]['aname']=p.aname
+#     expdic[expt]['standardgain']=p.standardgain
+#     expdic[expt]['ignoredwells']=p.ignoredwells
+#     expdic[expt]['ignored']=p.ignored
+#     expdic[expt]['negativevalues']=p.negativevalues
+#     expdic[expt]['serialnumber']=p.serialnumber
+#     expdic[expt]['machine']=p.machine
+#     expdic[expt]['expdate']=p.expdate
+#     expdic[expt]['datatypes']=p.datatypes
+#     expdic[expt]['gains']=p.gains
+#     expdic[expt]['platelabels']=p.platelabels
+#     expdic[expt]['allstrains']=p.allstrains
+#     expdic[expt]['allconditions']=p.allconditions
+#     expdic[expt]['alldata']=p.alldata
+#     expdic[expt]['importtime']=p.importtime
+#     expdic[expt]['gc']=p.gc
+#     for j in cl.values:
+#         m= j[1]
+#         s=j[2]
+#         expdic[expt]['data'][m][s]
+
+# dtype='OD'
+# cmap=colors.strongColors+nicePastels
+# row='experiment'
+# col='media'
+# hue='strain'
+# marker='plateloc'
+# linestyles=	['solid', '-' ,'--' , '-.' , ':' , 'None']
+# markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*10
+# include='all'
+# exclude=[]
+# 
+# huenumber= len(np.unique(df[hue]))
+# rownumber= len(np.unique(df[row]))
+# colnumber= len(np.unique(df[col]))
+# markernumber= len(np.unique(df[marker]))
+# 
+# plt.figure()
+# axarray=plt.subplots(rownumber, colnumber)
+# 
+# findloc=lambda loc, platelocs: find([j==loc for j in platelocs])[0]  
+# getprops= lambda num: [self.allreplicates.iloc[num, 0], self.allreplicates.iloc[num, 1], self.allreplicates.iloc[num, 2], self.allreplicates.iloc[num, 3]]
+# getcurve= lambda expt, media, strain, plateloc:  self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])]
+# 
+# 
+# 
+# plt.plot(axarray[][], x,
+
+
+
+
+
+
+        

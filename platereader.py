@@ -6,6 +6,9 @@ from fitderiv import fitderiv
 import genutils as gu
 import pandas as pd
 import datetime
+import logging
+from io import StringIO
+import inspect
 try:
     import seaborn as sns
 except ImportError:
@@ -44,10 +47,12 @@ class platereader:
 
     p.ignorewells()
 
-    General properties of the data are shown with:
+    General properties of the data and of previous processing are shown with:
 
     p.info()
     p.attributes()
+    p.corrections()
+    p.log()
 
     Pandas dataframes can be created to create new plots and to export to .xlsx or .csv file.
     For example,
@@ -93,7 +98,19 @@ class platereader:
         standardgain: if defined, fluorescence measurements are corrected to this gain
         ignorestrains: a list of strains in particular conditions to be ignored, such as ['GAL10 in 0.1% Gal']
         '''
-        self.version= '4.89'
+        self.version= '4.94'
+        self.importtime= '{:%Y-%b-%d %H:%M:%S}'.format(datetime.datetime.now())
+        # enable logging
+        self.logger= logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        self.logstream= StringIO()
+        loghandler= logging.StreamHandler(self.logstream)
+        self.logger.addHandler(loghandler)
+        # startlog
+        self.logger.info(f'{self.importtime}\n')
+        self.logmethod(self.logger)
+
+        # store names of data files
         self.dsheetnumber= dsheetnumber
         self.asheetnumber= asheetnumber
         if '.' not in dname: dname += '.xlsx'
@@ -220,8 +237,8 @@ class platereader:
         self.allstrains= allstrains
         self.allconditions= allconditions
         self.alldata= list(np.unique(alldata))
-        self.importtime= '{:%Y-%b-%d %H:%M:%S}'.format(datetime.datetime.now())
         if info: self.info()
+
 
 
     #####
@@ -238,12 +255,12 @@ class platereader:
             dstartindex: index in row where data starts
         '''
         try:
-            df= pd.read_excel(self.wdir + dname, sheet_number= dsheetnumber)
+            dfd= pd.read_excel(self.wdir + dname, sheet_number= dsheetnumber)
         except FileNotFoundError:
             raise(SystemExit("\nError: Can't find " + self.wdir + dname))
         if platereadertype == 'Tecan':
             # for Tecan plate reader post 2015
-            df= df.replace('OVER', self.overflow)
+            df= dfd.replace('OVER', self.overflow)
             dlabels= df[df.columns[0]].values
             # find plate
             snField= df.keys()[['Tecan i-control ' in j for j in df.keys()]][0]
@@ -267,31 +284,30 @@ class platereader:
             # data types
             datatypes= [str(df.ix[it-2][0]) for it in itime]
         elif platereadertype == 'Sunrise':
-            # Sunrise plate reader : not checked 5/2/2019
+            # Sunrise plate reader
             datatypes= ['OD']
             gains= ['']
             # rearrange data
             tdic= {}
             for well in [a + str(j) for j in np.arange(1,13) for a in 'ABCDEFGH']:
                 tdic[well]= []
-            for index, row in df.iterrows():
-                for ir, rd in enumerate(row[1:]):
-                    if row[0] in 'ABCDEFGH':
-                        tdic[row[0] + str(ir+1)].append(rd)
+            for index, row in dfd.iterrows():
+                if isinstance(row[-1], str) and row[-1][0] in 'ABCDEFGH':
+                    tdic[row[-1]]= row.values[:-1]
             df= pd.DataFrame(tdic).transpose()
             dlabels= np.array(df.index.tolist())
             # time
-            if not hasattr(self, 't'):
-                # not specified by Magellan: assign default
-                print('Warning: could not find any measurements of time')
-                t= np.arange(0, df.shape[1])
-            else:
-                t= self.t
+            t= gu.rmnans([float(str(ts).split('s')[0]) for ts in dfd.values[0]])/3600.0
             # indices to extract data
             idstartindex= 0
             dstartindex= 0
+            # metadata
+            fcol= dfd[dfd.columns[0]]
+            self.expdate= str(fcol[fcol.str.startswith('Date', na= False)]).split(':')[1].split('/')[0].strip()
+            self.machine= str(fcol[fcol.str.startswith('Instrument serial', na= False)]).split(':')[
+1].split('\n')[0].strip()
         elif platereadertype == 'Hidex':
-            # Hidex plate reader
+            # Hidex plate reader: out of date
             dlabels= df[df.columns[0]].values
             # time in hours
             itime= np.nonzero(df[df.columns[1]].values == 'Time (s)')[0]
@@ -380,6 +396,7 @@ class platereader:
         exclude: list of labels (platereader locations) of wells to be excluded
         clearall: if True, all previously ignored wells are re-instated.
         '''
+        self.logmethod(self.logger)
         exclude= gu.makelist(exclude)
         S= self.d
         if clearall and hasattr(self, 'ignoredwells'):
@@ -685,11 +702,13 @@ class platereader:
         conditionexcludes: ignore conditions with conditionexcludes in their name
         strainexcludes: ignore strains with strainexcludes in their name
         '''
+        self.logmethod(self.logger)
         if not self.ODcorrected:
             # correct for media
             if correctmedia: self.correctmedia(datatypes= 'OD', figs= figs,
                                                conditionincludes= conditionincludes,
-                                               conditionexcludes= conditionexcludes)
+                                               conditionexcludes= conditionexcludes,
+                                               log= False)
             # if no ODfname use the default
             if not ODfname: ODfname= self.wdir + self.ODfname
             S, noout= self.d, self.nooutchannels
@@ -748,7 +767,7 @@ class platereader:
     #####
     def correctmedia(self, datatypes= 'all', conditions= 'all', figs= True, noruns= 3, exitearly= False, bd= False,
                      results= False, conditionincludes= False, conditionexcludes= False, mean= False,
-                     commonmedia= False):
+                     commonmedia= False, log= True):
         '''
         Corrects OD or fluorescence for the OD or fluorescence of the media. Uses a Gaussian process to fit the time-series of measurements of all replicates of the media and subtracts this time series from the raw data.
 
@@ -765,7 +784,9 @@ class platereader:
         conditionexcludes: ignore conditions with conditionexcludes in their name
         mean: if True, the mean over time of the media values is used for the correction (rather than fitting with a Gaussian process)
         commonmedia: condition containing a 'null' strain that is to be used to correct multiple other conditions
+        log: if True, call will be added to log
         '''
+        if log: self.logmethod(self.logger)
         S= self.d
         cons= self.getconditions(conditions, False, conditionincludes, conditionexcludes)
         if datatypes == 'all': datatypes= self.datatypes
@@ -875,6 +896,7 @@ class platereader:
         ignoreneg: if True (default: False), proceed with correction despite negative fluorescence values
         minqrerr: minimum value allowed for the estimated error in the ratio of fluorescence (AutoFL/GFP) - too small values can cause instabilities in the fitting
         '''
+        self.logmethod(self.logger)
         f= gu.makelist(f)
         S= self.d
         # check have enough replicates
@@ -900,7 +922,7 @@ class platereader:
         if correctmedia:
             self.correctmedia(f, conditions, conditionincludes= conditionincludes,
                               conditionexcludes= conditionexcludes, results= results,
-                              mean= mediausemean)
+                              mean= mediausemean, log= False)
             print()
             if self.negativevalues:
                 print('There are negative values for fluorescence measurements')
@@ -993,7 +1015,7 @@ class platereader:
     def processref1(self, f, conditions, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes,
                     results):
         '''
-        Processes reference strain for data with one fluorescence measurement. Uses a Gaussian process to fit the fluorescence as a function of OD.
+        Internal function: Processes reference strain for data with one fluorescence measurement. Uses a Gaussian process to fit the fluorescence as a function of OD.
 
         Arguments
         --
@@ -1126,7 +1148,7 @@ class platereader:
     def processref2(self, f, conditions, refstrain, figs, noruns, bd, conditionincludes, conditionexcludes,
                     results, minqrerr):
         '''
-        Processes reference strain data for spectral unmixing (for experiments with two fluorescence measurements). Uses a Gaussian process to fit the ratio of emitted fluorescence measurements and checks that reference strain data is itself corrected to zero.
+        Internal function: Processes reference strain data for spectral unmixing (for experiments with two fluorescence measurements). Uses a Gaussian process to fit the ratio of emitted fluorescence measurements and checks that reference strain data is itself corrected to zero.
 
         Arguments
         --
@@ -1239,7 +1261,8 @@ class platereader:
     #####
     def plot(self, dtype= 'OD', conditions= 'all', strains= 'all', plate= False, onefig= False,
              plotod= True, nonull= False, conditionincludes= False, strainincludes= False,
-             conditionexcludes= False, strainexcludes= False, includeref= False, errors= False):
+             conditionexcludes= False, strainexcludes= False, includeref= False, errors= False,
+             xlim= False, ylim= False):
         '''
         Plots data for specified strains in specified conditions.
 
@@ -1264,7 +1287,11 @@ class platereader:
         strainexcludes: ignore strains with strainexcludes in their name
         includeref: whether or not to include the reference strain in fluorescence plots
         errors: if True, standard deviations over replicates are included for 'mn' dtypes
+        xlim: (xmin, xmax) as a tuple to set limits when onefig= True
+        ylim: (ymin, ymax) as a tuple to set limits when onefig= True
         '''
+        self.logmethod(self.logger)
+
         # check strains exits
         if not self.getconditionsandstrains(conditions, strains, conditionincludes, strainincludes,
                                             conditionexcludes, strainexcludes):
@@ -1332,6 +1359,10 @@ class platereader:
                     if (fldata and not includeref and 'refstrain' in list(S[c][s].keys())
                         and s == S[c][s]['refstrain']):
                         # ignore reference strain for fluorescence data
+                        continue
+                    elif dtype not in S[c][s]:
+                        # dtype not calculated
+                        print(dtype, 'not calculated for', s, 'in', c)
                         continue
                     else:
                         # plot data (not whole plate)
@@ -1410,6 +1441,8 @@ class platereader:
                 # put legend to the right of the current axis
                 ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
                 plt.ylim(bottom= 0)
+                if xlim: plt.xlim(xlim)
+                if ylim: plt.ylim(ylim)
             plt.show(block= False)
         if dtype == 'labels': plt.rcParams["figure.figsize"]= oldparams
 
@@ -1455,7 +1488,7 @@ class platereader:
     def getstats(self, dtype= 'OD', conditions= 'all', strains= 'all', bd= False, cvfn= 'matern',
                  esterrs= False, noruns= 5, stats= True, plotodgr= False, conditionincludes= False,
                  strainincludes= False, conditionexcludes= False, strainexcludes= False,
-                 keysmessage= True, figs= True, nosamples= 100):
+                 keysmessage= True, figs= True, nosamples= 100, iskip= False):
         '''
         Calls fitderiv.py to estimate the first time-derivate.
         The data calculated by fitderiv is added to the overall data structure. For example, p.d['1% Gal']['GAL2']['flogOD'] gives the fit to the log OD curve if OD data is used.
@@ -1472,7 +1505,7 @@ class platereader:
         esterrs: if True, measurement errors are empirically estimated from the variance across replicates at each time point; if False, the size of the measurement error is fit from the data assuming that this size is the same at all time points
         noruns: number of attempts made for each fit (default is 5), each run is made with random initial estimates of the parameters
         stats: calculate statistics if True
-        plotodgr: for OD data, plots growth rate versus log(OD) if True (default)
+        plotodgr: for OD data, plots growth rate versus OD if True (default is False)
         conditionincludes: selects only conditions with conditionincludes in their name
         strainincludes: selects only strains with strainincludes in their name
         conditionexcludes: ignore conditions with conditionexcludes in their name
@@ -1480,7 +1513,9 @@ class platereader:
         keysmessage: if True, displays keys for the strains that have been processed
         figs: if True (default), shows the fit and inferred derivative
         nosamples: number of samples to calculate errors in statistics for growth curve
+        iskip: use only every iskip'th data point to increase speed (must be an integer)
         '''
+        self.logmethod(self.logger)
         S, noout= self.d, self.nooutchannels
         linalgmax= 5
         for c in self.getconditions(conditions, True, conditionincludes, conditionexcludes):
@@ -1509,7 +1544,7 @@ class platereader:
                         fs= [fitderiv(S[c][s]['time'], d, figs= False, cvfn= cfn,
                                         logs= logs, bd= bd, esterrs= esterrs, statnames= snames,
                                         noruns= noruns, exitearly= False, linalgmax= linalgmax,
-                                        nosamples= nosamples)
+                                        nosamples= nosamples, iskip= iskip)
                              for cfn in cvfns]
                         # pick the covariance function with the highest maximum likelihood
                         ci= np.argmax([f.logmaxlike for f in fs])
@@ -1529,13 +1564,15 @@ class platereader:
                         # single covariance function
                         f= fitderiv(S[c][s]['time'], d, figs= False, cvfn= cvfn, logs= logs,
                                     bd= bd, esterrs= esterrs, statnames= snames, noruns= noruns,
-                                    exitearly= False, linalgmax= linalgmax, nosamples= nosamples)
+                                    exitearly= False, linalgmax= linalgmax, nosamples= nosamples,
+                                    iskip= iskip)
                         if figs:
                             plt.figure()
                             plt.subplot(2,1,1)
                             f.plotfit('f', ylabel= ylabels[0], figtitle= figtitle)
                             plt.subplot(2,1,2)
                             f.plotfit('df', ylabel= ylabels[1])
+                            plt.tight_layout()
                             plt.show(block= False)
                     if dtype == 'OD':
                         if plotodgr:
@@ -1621,6 +1658,7 @@ class platereader:
         figs: if True, an example of the area between the curves is shown
         nosamples: for the bootstraps to estimate error (default: 100)
         '''
+        self.logmethod(self.logger)
         fps= np.zeros(nosamples)
         # get and sample from Gaussian processes
         try:
@@ -1645,8 +1683,8 @@ class platereader:
                 gr1= gr1[:imax[0]]
             # interpolate data
             from scipy import interpolate
-            i0= interpolate.interp1d(od0, gr0)
-            i1= interpolate.interp1d(od1, gr1)
+            i0= interpolate.interp1d(od0, gr0, fill_value= 'extrapolate')
+            i1= interpolate.interp1d(od1, gr1, fill_value= 'extrapolate')
             # find common OD range
             odinit= np.max([od0[0], od1[0]])
             odfin= np.min([od0[-1], od1[-1]])
@@ -1668,6 +1706,41 @@ class platereader:
         return np.mean(fps), np.var(fps)
 
 
+    #####
+    # Logging
+    #####
+    def log(self):
+        '''
+        Prints log of all methods called and their arguments.
+        '''
+        print(self.logstream.getvalue())
+
+
+    def logmethod(self, logger):
+        '''
+        Internal function: logs a method and its arguments
+        '''
+        currframe= inspect.currentframe()
+        # find frame of calling routine
+        frame= inspect.getouterframes(currframe)[1].frame
+        # name of calling routine
+        methodname= inspect.getframeinfo(frame)[2]
+        # arguments of calling routine
+        args, _, _, locals= inspect.getargvalues(frame)
+        # add to log
+        if methodname == '__init__':
+            logstring= 'p= platereader('
+        else:
+            logstring= 'p.' + methodname + '('
+        for arg in args:
+            if 'self' not in arg:
+                if type(locals[arg]) is str:
+                    argstr= "'" + locals[arg] + "'"
+                else:
+                    argstr= str(locals[arg])
+                logstring += arg + '= ' + argstr + ', '
+        logstring= logstring[:-2] + ')\n'
+        logger.info(logstring)
 
 
 
@@ -1682,6 +1755,7 @@ class platereader:
         --
         savename: the name of the output file
         '''
+        self.logmethod(self.logger)
         import pickle
         if not savename:
             savename= self.wdir + self.name + '.pkl'
@@ -1719,6 +1793,7 @@ class platereader:
         sortby: an optional variable (or list of variables) to sort the data by
         ascending: whether to sort in ascending or descencing order (default: True)
         '''
+        self.logmethod(self.logger)
         variables, nottimevariables= self.datavariables(out= True, conditions= conditions,
                                                         strains= strains,
                                                         conditionincludes= conditionincludes,
@@ -1790,12 +1865,16 @@ class platereader:
         ftype : 'xlsx' (default) or 'csv'
         savename : name of file to be saved (default is to add _df to the name of the data set)
         '''
+        self.logmethod(self.logger)
         if hasattr(self, dfname):
             if not savename:
                 savename= self.wdir + self.name + '_' + dfname + '.' + ftype
             if ftype == 'xlsx':
                 print('Writing Excel file:', savename)
-                getattr(self, dfname).to_excel(savename, sheet_name= 'Sheet1', index= False)
+                try:
+                    getattr(self, dfname).to_excel(savename, sheet_name= 'Sheet1', index= False, engine= 'xlsxwriter')
+                except ValueError:
+                    print('Error: Excel cannot put lists into a cell that contains values')
             else:
                 print('Writing CSV file:', savename)
                 getattr(self, dfname).to_csv(savename, sep= ',', index= False)
@@ -1811,6 +1890,7 @@ class platereader:
         --
         dfname: dataframe to be deleted (default: 'df')
         '''
+        self.logmethod(self.logger)
         if hasattr(self, dfname): delattr(self, dfname)
 
 
@@ -1824,17 +1904,6 @@ class slpr(platereader):
     def __init__(self, dname, aname= 'default', platereadertype= 'Tecan', wdir= '', dsheetnumber= 0,
                  asheetnumber= 0, ODfname= 'ODcorrection_Glucose_Haploid.txt', warn= False, info= True,
                  standardgain= False, ignorestrains= []):
-
-        if platereadertype == 'Sunrise':
-            # extract time from sheet 0 of Excel file
-            timedf= pd.ExcelFile(wdir + dname).parse(0)
-            t= []
-            for index, row in timedf.iterrows():
-                if '/' in row[0]:
-                    t.append(int(row[0].split('/')[-2].split('s')[0]))
-            self.t= np.array(t)/3600
-            # data is in sheet 1
-            dsheetnumber= 1
 
         # call platereader
         super().__init__(dname, aname, platereadertype, wdir, dsheetnumber, asheetnumber, ODfname,

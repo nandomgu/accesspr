@@ -131,10 +131,10 @@ class fitderiv:
     to acknowledge the software.
     '''
 
-    def __init__(self, t, d, cvfn= 'sqexp', noruns= 3, exitearly= False, figs= False, bd= False,
+    def __init__(self, t, d, cvfn= 'sqexp', noruns= 5, exitearly= False, figs= False, bd= False,
                  esterrs= False, optmethod= 'l_bfgs_b', nosamples= 100, logs= True,
                  gui= False, figtitle= False, ylabel= 'y', stats= True, statnames= False,
-                 showstaterrors= True, warn= False, linalgmax= 3):
+                 showstaterrors= True, warn= False, linalgmax= 3, iskip= False):
         '''
         Runs a Gaussian process to fit data and estimate the time-derivative
 
@@ -143,7 +143,7 @@ class fitderiv:
         t: array of time points
         d: array of data with replicates in columns
         cvfn: kernel function for the Gaussian process used in the fit - 'sqexp' (squared exponential: default), 'matern' (Matern with nu= 5/2), or 'nn' (neural network)
-        noruns: number of fitting attempts made
+        noruns: number of fitting attempts made (default is 5)
         exitearly: if True, stop at the first successful fit; if False, take the best fit from all successful fits
         figs: plot the results of the fit
         bd: can be used to change the limits on the hyperparameters for the Gaussian process used in the fit
@@ -159,8 +159,9 @@ class fitderiv:
         showstaterrors: if True, display estimated errors for statistics
         warn: if False, warnings created by covariance matrices that are not positive semi-definite are stopped
         linalgmax: number of attempts (default is 3) if a linear algebra (numerical) error is generated
+        iskip: use only every iskip'th data point to increase speed (must be an integer)
         '''
-        self.version= '1.02'
+        self.version= '1.04'
         self.ylabel= ylabel
         self.logs= logs
         if not warn:
@@ -172,14 +173,21 @@ class fitderiv:
         except:
             noreps= 1
         self.noreps= noreps
-        self.t= t
-        self.d= d
+        self.origd= d
+        pt= t
+        self.pt= t
+        if iskip:
+            self.t= t[::iskip]
+            self.d= d[::iskip]
+            t, d= self.t, self.d
+        else:
+            self.t= t
+            self.d= d
         # bounds for hyperparameters
         bnn= {0 : (-1,5), 1: (-7,-2), 2: (-6,2)}
         bsqexp= {0: (-5,5), 1: (-6,2), 2: (-5,2)}
         bmatern= {0: (-5,5), 1: (-4,4), 2: (-5,2)}
         # take log of data
-        self.origd= d
         if logs:
             print('Taking natural logarithm of the data.')
             if np.any(np.nonzero(d < 0)):
@@ -256,7 +264,7 @@ class fitderiv:
                 print('\tlog10(hyperparameter %d)= %4.2f' % (el[0], np.log10(np.exp(g.lth_opt[el[0]]))))
         else:
             g.results()
-        g.predict(t, derivs= 2, merrorsnew= merrors)
+        g.predict(pt, derivs= 2, merrorsnew= merrors)
         fmnp= g.mnp
         fcovp= g.covp
         # save results
@@ -266,14 +274,12 @@ class fitderiv:
         self.lth= g.lth_opt
         self.fmnp= fmnp
         self.fcovp= fcovp
-        self.t= t
-        self.d= d
-        self.f= fmnp[:len(t)]
-        self.df= fmnp[len(t):2*len(t)]
-        self.ddf= fmnp[2*len(t):]
-        self.fvar= np.diag(fcovp)[:len(t)]
-        self.dfvar= np.diag(fcovp)[len(t):2*len(t)]
-        self.ddfvar= np.diag(fcovp)[2*len(t):]
+        self.f= fmnp[:len(pt)]
+        self.df= fmnp[len(pt):2*len(pt)]
+        self.ddf= fmnp[2*len(pt):]
+        self.fvar= np.diag(fcovp)[:len(pt)]
+        self.dfvar= np.diag(fcovp)[len(pt):2*len(pt)]
+        self.ddfvar= np.diag(fcovp)[2*len(pt):]
         self.merrors= merrors
         if stats: self.calculatestats(nosamples, statnames, showstaterrors)
         if figs:
@@ -332,9 +338,11 @@ class fitderiv:
         x= getattr(self, char)
         xv= getattr(self, char + 'var')
         if char == 'f':
-            plt.plot(self.t, self.d, 'r.')
-        plt.plot(self.t, x, 'b')
-        plt.fill_between(self.t, x-errorfac*np.sqrt(xv), x+errorfac*np.sqrt(xv), facecolor= 'blue', alpha= 0.2)
+            d= np.log(self.origd) if self.logs else self.origd
+            plt.plot(self.pt, d, 'r.')
+        plt.plot(self.pt, x, 'b')
+        plt.fill_between(self.pt, x-errorfac*np.sqrt(xv), x+errorfac*np.sqrt(xv), facecolor= 'blue',
+                         alpha= 0.2)
         if ylabel:
             plt.ylabel(ylabel)
         else:
@@ -361,7 +369,7 @@ class fitderiv:
             self.stats= statnames
         else:
             self.stats= ['max df', 'time of max df', 'inverse max df', 'max ' + self.ylabel, 'lag time']
-        t, noreps= self.t, self.noreps
+        t, noreps= self.pt, self.noreps
         fs, gs, hs= self.sample(nosamples)
         # calculate stats
         im= np.argmax(gs, 0)
@@ -429,6 +437,7 @@ class fitderiv:
             plt.bar(np.arange(len(stats)), data, barwidth, yerr= errs)
             ax.set_xticks(np.arange(len(stats)) + barwidth/2.0)
             ax.set_xticklabels(stats)
+            plt.tight_layout()
             plt.show(block= False)
         except AttributeError:
             print(" Statistics have not been calculated.")
@@ -463,8 +472,11 @@ class fitderiv:
         '''
         import pandas as pd
         ods= self.origd
-        data= [self.t, self.f, np.sqrt(self.fvar), self.df, np.sqrt(self.dfvar), ods]
-        labels= ['t', 'log(OD)', 'log(OD) error', 'gr', 'gr error'] + ['od']*ods.shape[1]
+        data= [self.pt, self.f, np.sqrt(self.fvar), self.df, np.sqrt(self.dfvar), ods]
+        if ods.ndim == 1:
+            labels= ['t', 'log(OD)', 'log(OD) error', 'gr', 'gr error', 'od']
+        else:
+            labels= ['t', 'log(OD)', 'log(OD) error', 'gr', 'gr error'] + ['od']*ods.shape[1]
         orgdata= np.column_stack(data)
         # make dataframes
         if rows:
@@ -484,13 +496,13 @@ class fitderiv:
                 df.to_csv(fname, sep= sep, header= False)
             else:
                 df.to_csv(fname, sep= sep, index= False)
-            dfs.to_csv(fname.split('.')[0] + '_stats.' + ftype, sep= sep, index= False)
+            dfs.to_csv('.'.join(fname.split('.')[:-1]) + '_stats.' + ftype, sep= sep, index= False)
         elif ftype == 'xls' or ftype == 'xlsx':
             if rows:
                 df.to_excel(fname, sheet_name= 'Sheet1', header= False)
             else:
                 df.to_excel(fname, sheet_name= 'Sheet1', index= False)
-            dfs.to_excel(fname.split('.')[0] + '_stats.xlsx', sheet_name= 'Sheet1', index= False)
+            dfs.to_excel('.'.join(fname.split('.')[:-1]) + '_stats.xlsx', sheet_name= 'Sheet1', index= False)
         else:
             print('!! File type is either not recognized or not specified. Cannot save as', fname)
 
