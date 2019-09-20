@@ -870,12 +870,16 @@ class accesspr:
                 self.assignsupportingFL()
             else:
                 self.analyseFL=False
-            try:
-                self.alignAll(rerun=True)
-            except Exception as err:
-                print('failed to align: '+str(err))
+            #             try:
+            #                 self.alignAll(rerun=True)
+            #             except Exception as err:
+            #                 print('failed to align: '+str(err))
             #self.interpLimit= np.min(np.array(list(self.experimentDuration.values())))
             #this stores the absolute duration (in hrs) of the shortest experiment
+            #local lambdas
+            self.getprops= lambda num: (self.allreplicates.iloc[num, 0], self.allreplicates.iloc[num, 1], self.allreplicates.iloc[num, 2], self.allreplicates.iloc[num, 3])
+            self.getindcurve= lambda expt, media, strain, plateloc, dtype:  self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])]
+            self.getenscurve= lambda expt, media, strain, dtype:  self.data[expt].d[media][strain][dtype]
     def getvariables(self, verbose=True):
         '''
         getvariables(self, verbose=True)
@@ -1166,35 +1170,37 @@ class accesspr:
             else:
                 self.data[entry] = pr.platereader(self.exptInfo[entry]['datapath'],self.exptInfo[entry]['contentspath'])
     def findMachines(self):
+        snref={}
+        snref['1006006292']='Plate Reader 1'
+        snref['1411011275']='Plate Reader 2'
+        snref['906006717']='Plate Reader 3'
+        snref['906006718']='Plate Reader 4'
+        snref['906006719']='Plate Reader 5'
+        snref['']=np.nan
         for expt in self.allexperiments:
             try:
                 self.machines[expt]= self.data[expt].machine
+                print('success in finding machine attribute')
             except:
                 print('experiment '+expt+' lacking ''machine'' attribute. Attempting retrieval from file...')
-                try:
-                    pth=self.data[expt].wdir + self.data[expt].dname
-                    #print(pth)
-                    xl= pd.ExcelFile(self.data[expt].wdir + self.data[expt].dname)
-                    df= xl.parse()#fixed to sheet 0 just as a temporary patch
-                    #print(df.head(10))
-                    if self.prtype == 'Tecan':
-                        ##getting the serial number of the machine to know whether it is PR1 or PR2
-                        snField=df.keys()[['Tecan i-control 'in j for j in df.keys()]][0] #this gives us the name of the 'infinite' field
-                        try:
-                            self.serialnumbers[expt]=df[snField][0].split('Serial number: ')[1] 
-                        except:
-                            print('problem finding serial number for experiment '+expt+'.')
-                            self.serialnumbers[expt]=''
-                    if self.serialnumbers[expt]=='1006006292':
-                        self.machines[expt]='Plate Reader 1'
-                    else:
-                        if self.serialnumbers[expt]=='1411011275':
-                            self.machines[expt]='Plate Reader 2'
-                        else:
-                            self.machines[expt]='unknown'
-                except:
-                    print('could not extract machine info from source file. Machine left unknown.')					
-                    self.machines[expt]= np.nan
+                pth=self.exptInfo[expt]['datapath']
+                #print(pth)
+                xl= pd.ExcelFile(pth)
+                df= xl.parse()#fixed to sheet 0 just as a temporary patch
+                #print(df.head(10))
+                if self.prtype == 'Tecan':
+                    ##getting the serial number of the machine to know whether it is PR1 or PR2
+                    snField=df.keys()[['Tecan i-control 'in j for j in df.keys()]][0] #this gives us the name of the 'infinite' field
+                    try:
+                        self.serialnumbers[expt]=df[snField][0].split('Serial number: ')[1] 
+                    except:
+                        print('problem finding serial number for experiment '+expt+'.')
+                        self.serialnumbers[expt]=''
+                    try:
+                        self.machines[expt]= snref[self.serialnumbers[expt]]
+                    except Exception as err:
+                        print('Couldn''t find machine for '+expt+' :'+str(err))
+                        self.machines[expt]= np.nan
     def assignFL(self, mainFL='noFL', mainFLperod='noFLperod', experiments=False):
         '''
         assignFL(self, mainFL='noFL', mainFLperod='noFLperod', experiments=False)
@@ -1742,7 +1748,7 @@ class accesspr:
             print('Experiments have already been aligned. to realign, try rerun=True')
             self.getvariables()
             self.checkallstats()
-    def plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=5, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left'):
+    def plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=5, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left', markevery=30, addLegend=True):
         markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*100
         '''
         intepdata, factorcolors, factormarkers=plotrepmean(self, media=False, strain=False, conditionsDF=False, experiments='all', ignoreExps=False, dtype='OD', col='Black', alpha=0.2, normalise=False, excludeFirst=0, excludeLast=-1, bootstrap=5, centeringVariable='time', factor=False, factorColors=False, factorMarkers=False, loc='upper left')
@@ -1836,14 +1842,15 @@ class accesspr:
                         factorColors[fact]=(colors.strongColors*100)[i_fact] 
                     if ppf.hasKey(factorMarkers,fact)==False: 
                         factorMarkers[fact]=(markers*100)[i_fact]
-                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha, marker=factorMarkers[fact], markevery=10)
+                    interpolatedFinal=bootstrapInterps(interpolatedToUse, centeringVariable, dtype, bootstrap=bootstrap, col=factorColors[fact], alpha=alpha, marker=factorMarkers[fact], markevery=markevery)
                     interpolated['Group_'+fact+'_'+dtype+' mean']=interpolatedFinal[dtype+' mean']
                     if bootstrap>0:
                         st=dtype+'bootstrapsd'
                     else:
                         st=dtype+'sd'
                     interpolated['Group_'+fact+'_'+st]=interpolatedFinal[st]
-                ppf.createFigLegend(keys=list(factorColors.keys()), cols= list(factorColors.values()), markers=list(factorMarkers.values()), loc=loc ) #creating a legend for the figure
+                if addLegend==True:
+                    ppf.createFigLegend(keys=list(factorColors.keys()), cols= list(factorColors.values()), markers=list(factorMarkers.values()), loc=loc ) #creating a legend for the figure
                 return(interpolated, factorColors, factorMarkers) 
             else:
                     #interpolated final contains the mean and sd that were plotted
@@ -2561,7 +2568,7 @@ class accesspr:
                 else:
                     if maxbefore and maxafter:
                         nbacksteps= np.floor(nsteps* (maxbefore/(maxbefore+maxafter)))-1  
-                        nfrontsteps= np.ceil(nsteps* (maxbafter/(maxbefore+maxafter))) 
+                        nfrontsteps= np.ceil(nsteps* (maxafter/(maxbefore+maxafter))) 
         steps= np.linspace(-maxbefore*mag, maxafter*mag, nsteps ) #points surrounding the peak time
         #stepsbefore=np.linspace(((-max)*mag), -1*mag, nbacksteps) #points before the peak time. negative training set
         #stepsafter=np.linspace( 0,(max)*mag, nfrontsteps)
@@ -2602,6 +2609,120 @@ class accesspr:
         beforeindices=[j for j in range(0, int(nbacksteps+1))]  
         afterindices=[j for j in range(int(nbacksteps+1), int(nbacksteps+1+nfrontsteps))]
         return dmOD,steps, beforeindices, afterindices
+    def plotraw(self, df=None, dtype='OD', x='time', cmap=colors.strongColors+colors.nicePastels, include='all', exclude=[], row='strain', rowvalues=None, col='media', colvalues=None, hue='experiment', huevalues=None, marker=None, markervalues=None, markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*10, xlim=[], ylim=[], separatelabel=True, centerat=None, ignore='clicked'):
+        '''plotraw(self, df=None, dtype='OD', x='time', cmap=colors.strongColors+colors.nicePastels, include='all', exclude=[], row='strain', rowvalues=None, col='media', colvalues=None, hue='experiment', huevalues=None, marker=None, markervalues=None, markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*10, xlim=[], ylim=[], separatelabel=True):
+        Plot categorised raw curves of x vs dtype. 
+        row, col, hue and marker are factors to categorise by. They must be columns in self.allreplicates.
+        rowvalues, colvalues etc. are the categories themselves (defaults to all existent categories) 
+            Examples:
+            self.plotraw(dtype='OD', row='strain', hue='experiment', col='media', colvalues=['m1', 'm2'] )
+            #create a plot of m rows x 2 columns where each row corresponds
+            # to m different strains and columns are curves grown in 2 media: m1 (first) and m2 (second)
+            #the colour of each curve  denotes what experiment where the curve is found. 
+        '''
+        colnumber=None
+        rownumber=None
+        if not isinstance( df, pd.DataFrame):
+            df=self.allreplicates
+
+        if hue is None:
+            hue='strain'
+            huevalues=self.allstrains
+            huenumber= 1
+            huedict= ppf.colorDict(keys=self.allstrains, colors=['blue']*100)
+        else:
+            if huevalues is None:
+                huevalues=np.unique(df[hue])
+            huedict= ppf.colorDict(keys=huevalues, colors=cmap)
+        if marker is None:
+            markervalues=self.allstrains
+            marker='strain'
+            markerdict= ppf.colorDict(keys=self.allstrains, colors=['']*100)
+        else:
+            if markervalues is None:
+                markervalues=np.unique(df[marker])
+            markerdict= ppf.colorDict(keys=markervalues, colors=markers)
+        if row is None:
+            rowvalues=list(self.allstrains)
+            row='strain'
+            rownumber=1
+            rowdict= ppf.colorDict(keys=rowvalues, colors=[0]*100)
+            print(rowdict)
+        else:
+            if rowvalues is None:
+                rowvalues=np.unique(df[row])
+            rownumber= np.size(rowvalues)
+            rowdict= ppf.colorDict(keys=rowvalues, colors=[j for j in range(0, rownumber)])
+            print(rowdict)
+        if col is None:
+            col='strain'
+            colvalues=list(self.allstrains)
+            colnumber=1
+            coldict= ppf.colorDict(keys=colvalues, colors=[0]*100)
+            print(coldict)
+        else:
+            if colvalues is None:
+                colvalues=np.unique(df[col])
+            colnumber= np.size(colvalues)
+            coldict= ppf.colorDict(keys=colvalues, colors=[j for j in range(0, colnumber)])
+            print(coldict)
+        #subsetting
+        #which=[j.all() for j in pd.concat([df[rowvar]==rowvalue, df[colvar]==colvalue, df[huevar]==huevalue,df[markervar]== markervalue], axis=1).values] 
+        #test if the dataframe row has the given features.
+        hasfeatures= lambda e, m, s, pl: [all([e in j, m in j, s in j, pl in j]) for j in df.values]  
+        #check if the individual line has an element of the subsets
+        isinsubset= lambda j: all([df[row][j] in rowvalues, df[col][j] in colvalues, df[hue][j] in huevalues, df[marker][j] in markervalues])
+        isincluded= lambda j: any( [x in include for x in df[[row, col, hue, marker]].iloc[j].values])
+        isexcluded= lambda j: any( [x in exclude for x in df[[row, col, hue, marker]].iloc[j].values])
+        fig, axarray=plt.subplots(rownumber, colnumber, figsize= [10,10], squeeze=False) ## stupid squeeze!!
+        print('DIMENSIONS \n'+ str(rownumber)+'  by  '+str(colnumber))
+        getprops= lambda num: (df.iloc[num, 0], df.iloc[num, 1], df.iloc[num, 2], df.iloc[num, 3])
+        getx= lambda expt, media, strain, plateloc:  self.data[expt].d[media][strain][x]
+        getindcurve= lambda expt, media, strain, plateloc, dtype:  self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])]
+        getenscurve= lambda expt, media, strain, dtype:  self.data[expt].d[media][strain][dtype]
+        #getcurve = lambda e, m, s, pl, dtype:  getindcurve(e,m,s,pl) if np.size(self.data[e].d[m][s][dtype],1)>1 and len(self.data[e].d[m][s]['plateloc']) >1 else getenscurve(e,m,s)
+        #example line of how to  use getcurve and getprops.
+        #plt.figure(); plt.plot(np.array([getcurve(*getprops(j)) for j in [1,2,3,4,5,6]]).T)    
+        for j in range(0, len(df)):
+            a={}
+            a['experiment'], a['media'], a['strain'], a['plateloc']= getprops(j)
+            a[hue]=df.iloc[j][hue]
+            a[col]= df.iloc[j][col]
+            a[row]=df.iloc[j][row]
+            a[marker]=df.iloc[j][marker] 
+            if a['plateloc'] in self.data[a['experiment']].ignoredwells or a['plateloc'] in self.ignoredwells[a['experiment']] or df[ignore].values[j]:
+                continue
+            if (isinsubset(j) or isincluded(j)) and not(isexcluded(j)):
+                try:
+                    curve=getindcurve(a['experiment'], a['media'], a['strain'], a['plateloc'], dtype) 
+                except:
+                    curve=getenscurve(a['experiment'], a['media'], a['strain'], dtype) 
+                #try:
+                ax=axarray[rowdict[df[row][j]]][coldict[df[col][j]]]
+                #except:
+                #    ax=axarray
+                xx=getx(a['experiment'], a['media'], a['strain'], a['plateloc'])
+                if centerat:
+                    xx=xx-df.iloc[j][centerat]
+                ax.plot(xx, curve, color=huedict[a[hue]], marker=markerdict[a[marker]], markevery=20, label=a[marker])
+                if xlim:
+                    ax.set_xlim(xlim)
+                if ylim:
+                    ax.set_ylim(ylim)
+                #axarray[rowdict[df[row][j]]][coldict[df[col][j]]].title.set_text(df[row][j]+' '+df[col][j])
+                if coldict[df.iloc[j][col]]==0:
+                    ax.set_ylabel(a[row])
+                if rowdict[df.iloc[j][row]]==0:
+                    ax.set_title(a[col])
+        fig.text(0.5, 0.04, x, ha='center')
+        fig.text(0.04, 0.5,  dtype, va='center', rotation='vertical')
+        if separatelabel:
+            plt.figure()
+            ppf.createFigLegend(dic=huedict)
+        try:
+            return axarray
+        except:
+            return ax
 def drawplatelayout():
     axplate=plt.axes()
     plt.xlim([0, 12])
@@ -2833,34 +2954,39 @@ def mergedicts(dictlist):
 #         s=j[2]
 #         expdic[expt]['data'][m][s]
 
-# dtype='OD'
-# cmap=colors.strongColors+nicePastels
-# row='experiment'
-# col='media'
-# hue='strain'
-# marker='plateloc'
-# linestyles=	['solid', '-' ,'--' , '-.' , ':' , 'None']
-# markers=['.', 'o', 's', '^', '+', 'v', '*', 'p', '<', '>', 'h', 'x', 'D']*10
-# include='all'
-# exclude=[]
-# 
-# huenumber= len(np.unique(df[hue]))
-# rownumber= len(np.unique(df[row]))
-# colnumber= len(np.unique(df[col]))
-# markernumber= len(np.unique(df[marker]))
-# 
-# plt.figure()
-# axarray=plt.subplots(rownumber, colnumber)
-# 
-# findloc=lambda loc, platelocs: find([j==loc for j in platelocs])[0]  
-# getprops= lambda num: [self.allreplicates.iloc[num, 0], self.allreplicates.iloc[num, 1], self.allreplicates.iloc[num, 2], self.allreplicates.iloc[num, 3]]
-# getcurve= lambda expt, media, strain, plateloc:  self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])]
-# 
-# 
-# 
-# plt.plot(axarray[][], x,
+
+### wizard
 
 
+# if not self.data:
+#     print('There is no data in your experiment. Try:\na) Check whether the path you inserted is correct\nb) try loading data from a previously stored accesspr data file with self.reloadrobust(filename)
+# if not FL:
+#     print('No fluorescence has been assigned. try running self.assignFL(mainFL=YOUR_FLUORESCENCE_CHANNEL))
+
+
+def odtime(self, od='0.25', default='first'):
+    from scipy.interpolate import interp1d
+    arr=np.zeros(len(self.allreplicates))*np.nan
+    for j in range(0, len(self.allreplicates)):
+        e,m,s,pl= self.getprops(j)
+        x=self.getenscurve(e,m,s, 'time')
+        y=self.getindcurve(e,m,s,pl, 'OD')
+        try:
+            func=interp1d(y,x, bounds_error=False, fill_value=np.nan)
+            if default=='first':
+                arr[j]=func(od)
+        except Exception as err:
+            print(str(j)+':'+e+' '+m+' '+s+' '+pl+':'+str(err))
+            arr[j]= np.nan
+    self.allreplicates['time to OD of '+str(od)]=arr
+
+def makeinterpolant(self, num, x='time', y='OD', xcenter=0):
+    from scipy.interpolate import interp1d
+    e,m,s,pl= self.getprops(num)
+    x=self.getenscurve(e,m,s, x-xcenter)
+    y=self.getindcurve(e,m,s,pl, y)
+    func=interp1d(x, y, bounds_error=False, fill_value=np.nan)
+    return func
 
 
 
