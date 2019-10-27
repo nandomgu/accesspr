@@ -802,6 +802,7 @@ class accesspr:
         self.stagepath=[]
         self.stagecount=[]
         self.prtype='Tecan'
+        self.ignoredwells=[]
         #source is a directory with several pickle files. if no pickles are found, then it tries to find experiments.
         self.source = source
         self.failedfiles=[]
@@ -880,6 +881,16 @@ class accesspr:
             self.getprops= lambda num: (self.allreplicates.iloc[num, 0], self.allreplicates.iloc[num, 1], self.allreplicates.iloc[num, 2], self.allreplicates.iloc[num, 3])
             self.getindcurve= lambda expt, media, strain, plateloc, dtype:  self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])]
             self.getenscurve= lambda expt, media, strain, dtype:  self.data[expt].d[media][strain][dtype]
+            self.findnull= lambda e, m, s, dtype: self.getenscurve(e,m,'null',dtype).mean(1)
+            self.findwt= lambda e, m, s, dtype: self.getenscurve(e,m,'WT',dtype).mean(1)
+            self.findref= lambda e, m, s, dtype, ref: self.getenscurve(e,m,ref,dtype).mean(1)
+            self.nullsubtract= lambda e, m, s, dtype: self.getenscurve(e,m,s,dtype).mean(2)-self.getenscurve(e,m,'null',dtype).mean(1) 
+            self.wtdivide= lambda e, m, s, dtype: self.getenscurve(e,m,s,dtype).mean(2)/self.getenscurve(e,m,'WT',dtype).mean(1)  
+            self.wtfsubtract= lambda e, m, s, dtype: self.getenscurve(e,m,s,dtype).mean(2)-self.getenscurve(e,m,'WT',dtype).mean(1) 
+            self.ensrefdivide= lambda e, m, s, dtype, ref: self.getenscurve(e,m,s,dtype).mean(2)/self.getenscurve(e,m,ref,dtype).mean(1)  
+            self.ensrefsubtract= lambda e, m, s, dtype, ref: self.getenscurve(e,m,s,dtype).mean(2)-self.getenscurve(e,m,ref,dtype).mean(1) 
+            self.refdivide= lambda e, m, s, pl, dtype, ref: self.getindcurve(e,m,s,pl,dtype).mean(2)/self.getenscurve(e,m,ref,dtype).mean(1)  
+            self.refsubtract= lambda e, m, s, pl, dtype, ref: self.getindcurve(e,m,s,pl,dtype).mean(2)-self.getenscurve(e,m,ref,dtype).mean(1) 
     def getvariables(self, verbose=True):
         '''
         getvariables(self, verbose=True)
@@ -2690,8 +2701,8 @@ class accesspr:
             a[col]= df.iloc[j][col]
             a[row]=df.iloc[j][row]
             a[marker]=df.iloc[j][marker] 
-            if a['plateloc'] in self.data[a['experiment']].ignoredwells or a['plateloc'] in self.ignoredwells[a['experiment']] or df[ignore].values[j]:
-                continue
+            #if a['plateloc'] in self.data[a['experiment']].ignoredwells or a['plateloc'] in self.ignoredwells[a['experiment']] or df[ignore].values[j]:
+            #    continue
             if (isinsubset(j) or isincluded(j)) and not(isexcluded(j)):
                 try:
                     curve=getindcurve(a['experiment'], a['media'], a['strain'], a['plateloc'], dtype) 
@@ -2718,7 +2729,7 @@ class accesspr:
         fig.text(0.04, 0.5,  dtype, va='center', rotation='vertical')
         if separatelabel:
             plt.figure()
-            ppf.createFigLegend(dic=huedict)
+            ppf.createFigLegend(dic=huedict, markers=markers)
         try:
             return axarray
         except:
@@ -2980,15 +2991,82 @@ def odtime(self, od='0.25', default='first'):
             arr[j]= np.nan
     self.allreplicates['time to OD of '+str(od)]=arr
 
-def makeinterpolant(self, num, x='time', y='OD', xcenter=0):
+def makeinterpolant(self, emsp=None,  x='time', y='OD', xcenter=0, ycenter=0, ymultiply=1, ydivide=1):
     from scipy.interpolate import interp1d
-    e,m,s,pl= self.getprops(num)
-    x=self.getenscurve(e,m,s, x-xcenter)
-    y=self.getindcurve(e,m,s,pl, y)
+    if not not emsp:
+        e,m,s,pl=emsp[0], emsp[1], emsp[2], emsp[3]
+    else:
+        e,m,s,pl= self.getprops(num)
+    x=self.getenscurve(e,m,s, x)-xcenter
+    y=(self.getindcurve(e,m,s,pl, y)-ycenter)*ymultiply/ydivide
     func=interp1d(x, y, bounds_error=False, fill_value=np.nan)
     return func
 
+#ensemble interpolant
+def makeinterpolantens(self, ems=None,  x='time', y='OD', xcenter=0, ycenter=0, ymultiply=1, ydivide=1):
+    from scipy.interpolate import interp1d
+    if not not ems:
+        e,m,s=ems[0], ems[1], ems[2]
+    else:
+        e,m,s,pl= self.getprops(num)
+    x=self.getenscurve(e,m,s, x)-xcenter
+    y=(self.getenscurve(e,m,s, y).mean(1)-ycenter)*ymultiply/ydivide
+    func=interp1d(x, y, bounds_error=False, fill_value=np.nan)
+    return func
+
+def makeinterpolantens2(self, ems=None,  x='time', y='OD', xcenter=None, ycenter=0, ymultiply=1, ydivide=1):
+    from scipy.interpolate import interp1d
+    if not not ems:
+        e,m,s=ems[0], ems[1], ems[2]
+    else:
+        e,m,s,pl= self.getprops(num)
+    if not not xcenter: # if it is a number
+        x=self.getenscurve(e,m,s, x)-xcenter
+    if isinstance(xcenter, str):
+        x=self.getenscurve(e,m,s, x)-self.xcenter
+    y=(self.getenscurve(e,m,s, y).mean(1)-ycenter)*ymultiply/ydivide
+    func=interp1d(x, y, bounds_error=False, fill_value=np.nan)
+    return func
+
+self.getenscurve
+
+
+def processts(self, x, y, nums=None, times=[0], xcenter=None, ycenter=None, ymultiply=None, ydivide=None):
+    if not nums:
+        nums=range(0, len(self.allreplicates))
+    inn=[]
+    for j in nums:
+        if not not xcenter:
+            xc=self.allreplicates[xcenter][j]
+        else:
+            xc=0
+        if not not ycenter:
+            yc=self.allreplicates[ycenter][j]
+        else:
+            yc=0
+        if not not ymultiply:
+            ym=self.allreplicates[ymultiply][j]
+        else:
+            ym=1
+        if not not ydivide:
+            yd=self.allreplicates[ydivide][j]
+        else:
+            yd=1
+        inn.append(makeinterpolant(self, j, x=x, y=y, xcenter= xc, ycenter=yc, ymultiply=ym)(times))
+    return inn
+    
 
 
 
-        
+###contents reformatting. goal: attach experiment media strain plateloc dtype to data
+platecodes=pd.DataFrame([[j+k for j in list(testcnt.index)] for k in [str(x) for x in testcnt.columns]]) 
+
+
+
+
+
+def contentcolumns(contentsfile):
+
+[[testcnt.loc[j,int(k)].split(' in ')[1],testcnt.loc[j,int(k)].split(' in ')[0],j+k ]  for j in list(testcnt.index) for k in [str(x) for x in testcnt.columns]]  
+
+
