@@ -2991,7 +2991,7 @@ def odtime(self, od='0.25', default='first'):
             arr[j]= np.nan
     self.allreplicates['time to OD of '+str(od)]=arr
 
-def makeinterpolant(self, emsp=None,  x='time', y='OD', xcenter=0, ycenter=0, ymultiply=1, ydivide=1):
+def makeinterpolant(self, emsp=None, num=None, x='time', y='OD', xcenter=0, ycenter=0, ymultiply=1, ydivide=1):
     from scipy.interpolate import interp1d
     if not not emsp:
         e,m,s,pl=emsp[0], emsp[1], emsp[2], emsp[3]
