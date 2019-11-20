@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as pch
 import os.path as path
 import os 
-import pandas as pd
+#import pandas as pd
+import modin.pandas as pd
 import scipy
 import scipy.interpolate as scint
 from functools import partial
@@ -26,7 +27,7 @@ from matplotlib.widgets import RectangleSelector
 from platform import system, release 
 #from decimal import *
 #getcontext().prec = 3
-
+import modin.pandas as pd
 #useful small functions   
 #find the column number that corresponds to a specific column name
 findloc=lambda loc, platelocs: np.nonzero([j==loc for j in platelocs])[0][0]      
@@ -779,7 +780,7 @@ class accesspr:
 
     '''
 
-    def __init__(self, source=[], params={}, encoding='latin1', ignoreFiles=False,analyseFL=True, onlyFiles=False, FL='noFL', FLperod='noFLperod',  preprocess=False, ignorepickles=False, ignorexls=False):
+    def __init__(self, source=[], params={}, encoding='latin1', ignoreFiles=False,analyseFL=True, onlyFiles=False, FL='noFL', FLperod='noFLperod',  preprocess=False, ignorepickles=False, ignorexls=False, filecontains=[]):
         '''
         obj=acesspr( source, params={}; encoding='latin1', ignoreFiles=False, FL='noFL', FLperod='noFLperod', onlyFiles=False, analyseFL=True, preprocess=True)
         initializes an accesspr instance from a path specifying either a directory or a pickle file. if this fails, try changing the encoding to ascii, utf8, utf16 or latin1 (so far tried).
@@ -803,6 +804,7 @@ class accesspr:
         self.stagecount=[]
         self.prtype='Tecan'
         self.ignoredwells=[]
+        self.filecontains=filecontains
         #source is a directory with several pickle files. if no pickles are found, then it tries to find experiments.
         self.source = source
         self.failedfiles=[]
@@ -981,7 +983,7 @@ class accesspr:
                         files=os.listdir(pth)
                         hasExcel=0;
                         for f in files:
-                            if f.endswith('.xls') or f.endswith('.xlsx'):
+                            if f.endswith('.xls') or f.endswith('.xlsx')  :
                                 hasExcel+=1;
                                 if f.endswith('contents.xls') or f.endswith('contents.xlsx') or np.array([isinstance(j, str) for j in re.findall("contents",f, flags=re.IGNORECASE)]).any():
                                     contentsfile=src+'/'+entry+'/'+f
@@ -990,12 +992,13 @@ class accesspr:
                                     if not f.endswith('preprocessed.xlsx'): #if no preprocessing required import file wo preprocessing
                                         datafile=src+'/'+entry+'/'+f
                                             #print('datafile:'+datafile+'\n')
-                        if hasExcel>=2 and not self.ignorexls:
+                        if hasExcel>=2 and not self.ignorexls :
                             print('directory with excel files will be incorporated.')
                             #the folder may contain more than one experiments and the name of the experiment may differ from
                             #that of the folder. therefore we use the experiment filename as a unifying reference
                             #print('data and contents files: '+ formatstring(datafile)+formatstring(contentsfile))
-                            if contentsfile and datafile:
+                            if contentsfile and datafile and ((self.onlyFiles==False and not self.filecontains) or  np.array([j in datafile for j in self.filecontains]).any()):
+                                #print(contentsfile, datafile)
                                 #creating pr file from scratch
                                 try:
                                     p=pr.platereader(datafile, contentsfile, info=False)
@@ -2688,9 +2691,6 @@ class accesspr:
         fig, axarray=plt.subplots(rownumber, colnumber, figsize= [10,10], squeeze=False) ## stupid squeeze!!
         print('DIMENSIONS \n'+ str(rownumber)+'  by  '+str(colnumber))
         getprops= lambda num: (df.iloc[num, 0], df.iloc[num, 1], df.iloc[num, 2], df.iloc[num, 3])
-        getx= lambda expt, media, strain, plateloc:  self.data[expt].d[media][strain][x]
-        getindcurve= lambda expt, media, strain, plateloc, dtype:  self.data[expt].d[media][strain][dtype][:, findloc(plateloc, self.data[expt].d[media][strain]['plateloc'])]
-        getenscurve= lambda expt, media, strain, dtype:  self.data[expt].d[media][strain][dtype]
         #getcurve = lambda e, m, s, pl, dtype:  getindcurve(e,m,s,pl) if np.size(self.data[e].d[m][s][dtype],1)>1 and len(self.data[e].d[m][s]['plateloc']) >1 else getenscurve(e,m,s)
         #example line of how to  use getcurve and getprops.
         #plt.figure(); plt.plot(np.array([getcurve(*getprops(j)) for j in [1,2,3,4,5,6]]).T)    
@@ -2705,14 +2705,14 @@ class accesspr:
             #    continue
             if (isinsubset(j) or isincluded(j)) and not(isexcluded(j)):
                 try:
-                    curve=getindcurve(a['experiment'], a['media'], a['strain'], a['plateloc'], dtype) 
+                    curve=self.getindcurve(a['experiment'], a['media'], a['strain'], a['plateloc'], dtype) 
                 except:
-                    curve=getenscurve(a['experiment'], a['media'], a['strain'], dtype) 
+                    curve=self.getenscurve(a['experiment'], a['media'], a['strain'], dtype) 
                 #try:
                 ax=axarray[rowdict[df[row][j]]][coldict[df[col][j]]]
                 #except:
                 #    ax=axarray
-                xx=getx(a['experiment'], a['media'], a['strain'], a['plateloc'])
+                xx=self.getenscurve(a['experiment'], a['media'], a['strain'], x)
                 if centerat:
                     xx=xx-df.iloc[j][centerat]
                 ax.plot(xx, curve, color=huedict[a[hue]], marker=markerdict[a[marker]], markevery=20, label=a[marker])
@@ -2773,7 +2773,7 @@ def clickwells(self, expts=[], dtype= 'OD', colormap='cool', colorMapRange=False
     self.allreplicates[label]=False
     for j in expts:
         clickfig=plt.figure()
-        ax=showplate(self.data[j], dtype= 'OD', colormap='cool', colorMapRange=False, size=size, timeRange=False, addFL=False) 
+        ax=showplate(self.data[j], dtype= dtype, colormap=colormap, colorMapRange=colorMapRange, size=size, timeRange=timeRange, addFL=addFL) 
         plt.suptitle(j+'\nleftclick: ignore well \n rclick/enter: next expt. delete: unclick last well')
         wells=selectwells(n=96, axplate=ax, color=color)
         self.ignoredwells[j]=wells;
@@ -3028,7 +3028,6 @@ def makeinterpolantens2(self, ems=None,  x='time', y='OD', xcenter=None, ycenter
     func=interp1d(x, y, bounds_error=False, fill_value=np.nan)
     return func
 
-self.getenscurve
 
 
 def processts(self, x, y, nums=None, times=[0], xcenter=None, ycenter=None, ymultiply=None, ydivide=None):
@@ -3057,16 +3056,24 @@ def processts(self, x, y, nums=None, times=[0], xcenter=None, ycenter=None, ymul
     
 
 
+#####writing all curves to a table!!!
+
+# def save(filename, datatypes
+# 
+# writecurve_time_OD= lambda fil, j: fil.write(','.join(list(self.getprops(j))) +','+ printarray(self.getenscurve(*self.getprops(j)[0:3], 'time'))+','+printarray( self.getindcurve(*self.getprops(j), 'OD'))+'\n')  
+# 
+# [writecurve_time_OD(fil, j) for j in rng] 
+
 
 ###contents reformatting. goal: attach experiment media strain plateloc dtype to data
-platecodes=pd.DataFrame([[j+k for j in list(testcnt.index)] for k in [str(x) for x in testcnt.columns]]) 
+#platecodes=pd.DataFrame([[j+k for j in list(testcnt.index)] for k in [str(x) for x in testcnt.columns]]) 
 
 
 
 
 
-def contentcolumns(contentsfile):
+#def contentcolumns(contentsfile):
 
-[[testcnt.loc[j,int(k)].split(' in ')[1],testcnt.loc[j,int(k)].split(' in ')[0],j+k ]  for j in list(testcnt.index) for k in [str(x) for x in testcnt.columns]]  
+#[[testcnt.loc[j,int(k)].split(' in ')[1],testcnt.loc[j,int(k)].split(' in ')[0],j+k ]  for j in list(testcnt.index) for k in [str(x) for x in testcnt.columns]]  
 
 
